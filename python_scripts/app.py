@@ -38,7 +38,7 @@ st.markdown("---")
 
 
 # =====================================
-# LOAD FILES
+# LOAD FILES (ONLY SIP ADDED)
 # =====================================
 def load_files(files):
 
@@ -46,6 +46,7 @@ def load_files(files):
     cams_trans = None
     kfin_inv = None
     kfin_trans = None
+    sip_file = None   # NEW ADDITION
 
     for file in files:
 
@@ -67,7 +68,13 @@ def load_files(files):
         elif "kfin" in filename and "trans" in filename:
             kfin_trans = pd.read_excel(file)
 
-    return cams_inv, cams_trans, kfin_inv, kfin_trans
+        # =========================
+        # SIP FILE (NEW)
+        # =========================
+        elif "sip" in filename:
+            sip_file = file
+
+    return cams_inv, cams_trans, kfin_inv, kfin_trans, sip_file
 
 
 # =====================================
@@ -83,7 +90,7 @@ if btn_extract:
 
         st.info("📦 Reading uploaded files...")
 
-        cams_inv, cams_trans, kfin_inv, kfin_trans = load_files(uploaded_files)
+        cams_inv, cams_trans, kfin_inv, kfin_trans, sip_file = load_files(uploaded_files)
 
         uploaded_count = sum(
             x is not None
@@ -91,7 +98,8 @@ if btn_extract:
                 cams_inv,
                 cams_trans,
                 kfin_inv,
-                kfin_trans
+                kfin_trans,
+                sip_file   # NEW
             ]
         )
 
@@ -103,6 +111,7 @@ if btn_extract:
 
         from etl_investor_master import process_investor_master
         from etl_trans import process_transactions
+        from etl_sip import process_sip   # NEW
 
         # =====================================
         # INVESTOR MASTER
@@ -148,9 +157,29 @@ if btn_extract:
 
                 st.code(traceback.format_exc())
 
-        st.session_state.extracted = True
+        # =====================================
+        # SIP (MINIMAL ADDITION)
+        # =====================================
+        if sip_file is not None:
 
-        st.success("🎉 Extraction Completed Successfully.")
+             try:
+
+                st.info("📥 Loading SIP Data...")
+
+                from etl_sip import process_sip   # already correct
+
+                process_sip(sip_file)   # ✅ FIXED (removed engine)
+
+                st.success("✅ SIP Loaded into Bronze")
+
+             except Exception:
+
+                st.error("❌ SIP ETL Failed")
+                st.code(traceback.format_exc())
+
+                st.session_state.extracted = True
+
+                st.success("🎉 Extraction Completed Successfully.")
 
     except Exception:
 
@@ -173,9 +202,9 @@ if btn_transform:
 
         st.info("🟡 Running Silver Transformation...")
 
+        # EXISTING
         load_silver()
 
-        st.success("✅ Silver Layer Created Successfully")
 
     except Exception:
         st.error("❌ Transform Failed")

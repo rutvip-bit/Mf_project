@@ -26,7 +26,7 @@ def load_silver():
         "investor_master",
         engine,
         schema="silver",
-        if_exists="replace",      # use append if you don't want to overwrite
+        if_exists="replace",
         index=False,
         chunksize=5000,
         method="multi"
@@ -48,6 +48,30 @@ def load_silver():
 
     transaction_df.to_sql(
         "transaction",
+        engine,
+        schema="silver",
+        if_exists="replace",
+        index=False,
+        chunksize=5000,
+        method="multi"
+    )
+
+    # --------------------------
+    # SIP (NEW ADDITION)
+    # --------------------------
+    sip_df = pd.read_sql(
+        """
+        SELECT *
+        FROM bronze.sip_info
+        WHERE flag = 0
+        """,
+        engine
+    )
+
+    sip_df = sip_df.drop(columns=["flag"], errors="ignore")
+
+    sip_df.to_sql(
+        "sip_info",
         engine,
         schema="silver",
         if_exists="replace",
