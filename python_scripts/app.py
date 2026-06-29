@@ -165,13 +165,18 @@ if btn_extract:
 if btn_transform:
 
     if not st.session_state.extracted:
-
         st.warning("⚠️ Run Extract first.")
-
         st.stop()
 
-    st.info("🟡 Transform Layer")
+    try:
+        from transformations.transform import load_silver
 
-    # Silver Layer
+        st.info("🟡 Running Silver Transformation...")
 
-    st.success("✅ Transform Completed")    
+        load_silver()
+
+        st.success("✅ Silver Layer Created Successfully")
+
+    except Exception:
+        st.error("❌ Transform Failed")
+        st.code(traceback.format_exc())

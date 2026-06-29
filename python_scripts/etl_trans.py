@@ -212,7 +212,7 @@ def process_transactions(cams=None, kfin=None):
     # LOAD EXISTING DATA
     # =========================
     existing = pd.read_sql(
-        "SELECT * FROM transaction",
+        "SELECT * FROM bronze.transaction",
         engine
     )
 
@@ -224,10 +224,11 @@ def process_transactions(cams=None, kfin=None):
     df = df.reindex(columns=existing.columns, fill_value="")
     existing = existing.reindex(columns=df.columns, fill_value="")
 
+    # Convert everything to string
     df = df.fillna("").astype(str)
     existing = existing.fillna("").astype(str)
 
-    # strip spaces
+    # Remove leading/trailing spaces
     for col in df.columns:
         df[col] = df[col].str.strip()
 
@@ -235,33 +236,37 @@ def process_transactions(cams=None, kfin=None):
         existing[col] = existing[col].str.strip()
 
     # =========================
-    # REMOVE DUPLICATES (SAME LOGIC AS INVESTOR MASTER)
+    # FLAG DUPLICATES
+    # 0 = New Record
+    # 1 = Already Exists in PostgreSQL
     # =========================
-    existing_rows = set(map(tuple, existing.values.tolist()))
+    compare_cols = [col for col in df.columns if col != "flag"]
 
-    new_rows = df[~df.apply(tuple, axis=1).isin(existing_rows)]
+    existing_rows = set(
+        map(tuple, existing[compare_cols].values.tolist())
+    )
 
-    print(f"Incoming rows : {len(df)}")
-    print(f"Existing rows : {len(existing)}")
-    print(f"New rows      : {len(new_rows)}")
+    duplicate_mask = df[compare_cols].apply(tuple, axis=1).isin(existing_rows)
+
+    df["flag"] = duplicate_mask.astype(int)
+
+    print(f"Incoming rows  : {len(df)}")
+    print(f"Existing rows  : {len(existing)}")
+    print(f"Duplicate rows : {duplicate_mask.sum()}")
+    print(f"Unique rows    : {(~duplicate_mask).sum()}")
 
     # =========================
-    # INSERT ONLY NEW ROWS
+    # INSERT ALL ROWS
     # =========================
-    if not new_rows.empty:
+    df.to_sql(
+        "transaction",
+        engine,
+     schema="bronze",
+        if_exists="append",
+        index=False,
+        chunksize=5000,
+        method="multi"
+    )
 
-        new_rows.to_sql(
-            "transaction",
-            engine,
-            if_exists="append",
-            index=False,
-            chunksize=5000,
-            method="multi"
-        )
-
-        print(f"{len(new_rows)} rows inserted successfully.")
-
-    else:
-        print("No new rows found. Skipped duplicate records.")
-
+    print(f"{len(df)} rows inserted successfully.")
     print("Transaction ETL Completed Successfully.")

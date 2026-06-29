@@ -265,7 +265,7 @@ def process_investor_master(cams=None, kfin=None):
     # LOAD EXISTING DATA
     # =========================
     existing = pd.read_sql(
-        "SELECT * FROM investor_master",
+        "SELECT * FROM bronze.investor_master",
         engine
     )
 
@@ -280,7 +280,6 @@ def process_investor_master(cams=None, kfin=None):
 
     # Convert everything to string
     df = df.fillna("").astype(str)
-
     existing = existing.fillna("").astype(str)
 
     # Remove leading/trailing spaces
@@ -291,38 +290,37 @@ def process_investor_master(cams=None, kfin=None):
         existing[col] = existing[col].str.strip()
 
     # =========================
-    # REMOVE DUPLICATES
-    # Skip only when EVERY COLUMN matches
+    # FLAG DUPLICATES
+    # 0 = New Record
+    # 1 = Already Exists in PostgreSQL
     # =========================
+    compare_cols = [col for col in df.columns if col != "flag"]
+
     existing_rows = set(
-        map(tuple, existing.values.tolist())
+        map(tuple, existing[compare_cols].values.tolist())
     )
 
-    new_rows = df[
-        ~df.apply(tuple, axis=1).isin(existing_rows)
-    ]
+    duplicate_mask = df[compare_cols].apply(tuple, axis=1).isin(existing_rows)
 
-    print(f"Incoming rows : {len(df)}")
-    print(f"Existing rows : {len(existing)}")
-    print(f"New rows      : {len(new_rows)}")
+    df["flag"] = duplicate_mask.astype(int)
+
+    print(f"Incoming rows  : {len(df)}")
+    print(f"Existing rows  : {len(existing)}")
+    print(f"Duplicate rows : {duplicate_mask.sum()}")
+    print(f"Unique rows    : {(~duplicate_mask).sum()}")
 
     # =========================
-    # INSERT NEW ROWS
+    # INSERT ALL ROWS
     # =========================
-    if not new_rows.empty:
+    df.to_sql(
+      "investor_master",
+       engine,
+       schema="bronze",
+       if_exists="append",
+       index=False,
+       chunksize=5000,
+       method="multi"
+    )
 
-        new_rows.to_sql(
-            "investor_master",
-            engine,
-            if_exists="append",
-            index=False,
-            chunksize=5000,
-            method="multi"
-        )
-
-        print(f"{len(new_rows)} rows inserted successfully.")
-
-    else:
-        print("No new rows found. Skipped duplicate records.")
-
+    print(f"{len(df)} rows inserted successfully.")
     print("Investor Master Loaded Successfully.")
