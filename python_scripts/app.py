@@ -2,25 +2,12 @@ import streamlit as st
 import pandas as pd
 import traceback
 
-# =====================================
-# PAGE CONFIG
-# =====================================
-st.set_page_config(
-    page_title="IntelliWealth",
-    layout="wide"
-)
-
+st.set_page_config(page_title="IntelliWealth", layout="wide")
 st.title("📊 Mutual Funds")
 
-# =====================================
-# SESSION STATE
-# =====================================
 if "extracted" not in st.session_state:
     st.session_state.extracted = False
 
-# =====================================
-# FILE UPLOAD
-# =====================================
 uploaded_files = st.file_uploader(
     "📂 Upload CAMS / KFintech Files",
     type=["xlsx"],
@@ -36,175 +23,108 @@ btn_transform = col2.button("🟡 Transform Data")
 
 st.markdown("---")
 
-
-# =====================================
-# LOAD FILES (ONLY SIP ADDED)
-# =====================================
 def load_files(files):
 
     cams_inv = None
     cams_trans = None
     kfin_inv = None
     kfin_trans = None
-    sip_file = None   # NEW ADDITION
+    sip_file = None
 
     for file in files:
 
         filename = file.name.lower()
 
-        # CAMS Investor Master
         if "cams" in filename and "inv" in filename:
             cams_inv = pd.read_excel(file)
 
-        # CAMS Transaction
         elif "cams" in filename and "trans" in filename:
             cams_trans = pd.read_excel(file)
 
-        # KFIN Investor Master
         elif "kfin" in filename and "investor" in filename:
             kfin_inv = pd.read_excel(file)
 
-        # KFIN Transaction
         elif "kfin" in filename and "trans" in filename:
             kfin_trans = pd.read_excel(file)
 
-        # =========================
-        # SIP FILE (NEW)
-        # =========================
         elif "sip" in filename:
             sip_file = file
 
     return cams_inv, cams_trans, kfin_inv, kfin_trans, sip_file
 
+def is_valid(df):
+    return df is not None and not df.empty
 
-# =====================================
-# EXTRACT
-# =====================================
+
 if btn_extract:
 
     try:
 
         if not uploaded_files:
-            st.warning("⚠️ Please upload at least one Excel file.")
+            st.warning("⚠️ Please upload files")
             st.stop()
 
-        st.info("📦 Reading uploaded files...")
+        st.info("📦 Reading files...")
 
         cams_inv, cams_trans, kfin_inv, kfin_trans, sip_file = load_files(uploaded_files)
 
-        uploaded_count = sum(
-            x is not None
-            for x in [
-                cams_inv,
-                cams_trans,
-                kfin_inv,
-                kfin_trans,
-                sip_file   # NEW
-            ]
-        )
+        # ✅ FIXED CHECK (NO DataFrame ambiguity)
+        uploaded_count = sum([
+            is_valid(cams_inv),
+            is_valid(cams_trans),
+            is_valid(kfin_inv),
+            is_valid(kfin_trans),
+            sip_file is not None
+        ])
 
         if uploaded_count == 0:
-            st.error("❌ No valid files detected.")
+            st.error("❌ No valid files detected")
             st.stop()
 
-        st.success(f"✅ {uploaded_count} valid file(s) detected.")
+        st.success(f"✅ {uploaded_count} file(s) detected")
 
         from etl_investor_master import process_investor_master
         from etl_trans import process_transactions
-        from etl_sip import process_sip   # NEW
+        from etl_sip import process_sip
 
-        # =====================================
-        # INVESTOR MASTER
-        # =====================================
-        if cams_inv is not None or kfin_inv is not None:
+        # INVESTOR
+        if is_valid(cams_inv) or is_valid(kfin_inv):
+            st.info("📥 Investor Master...")
+            process_investor_master(cams=cams_inv, kfin=kfin_inv)
+            st.success("✅ Investor Loaded")
 
-            try:
-
-                st.info("📥 Loading Investor Master...")
-
-                process_investor_master(
-                    cams=cams_inv,
-                    kfin=kfin_inv
-                )
-
-                st.success("✅ Investor Master Loaded")
-
-            except Exception:
-
-                st.error("❌ Investor Master ETL Failed")
-
-                st.code(traceback.format_exc())
-
-        # =====================================
         # TRANSACTION
-        # =====================================
-        if cams_trans is not None or kfin_trans is not None:
+        if is_valid(cams_trans) or is_valid(kfin_trans):
+            st.info("📥 Transactions...")
+            process_transactions(cams=cams_trans, kfin=kfin_trans)
+            st.success("✅ Transactions Loaded")
 
-            try:
-
-                st.info("📥 Loading Transactions...")
-
-                process_transactions(
-                    cams=cams_trans,
-                    kfin=kfin_trans
-                )
-
-                st.success("✅ Transaction Table Loaded")
-
-            except Exception:
-
-                st.error("❌ Transaction ETL Failed")
-
-                st.code(traceback.format_exc())
-
-        # =====================================
-        # SIP (MINIMAL ADDITION)
-        # =====================================
+        # SIP (silent skip if missing)
         if sip_file is not None:
+            st.info("📥 SIP...")
+            process_sip(sip_file)
+            st.success("✅ SIP Loaded")
 
-             try:
-
-                st.info("📥 Loading SIP Data...")
-
-                from etl_sip import process_sip   # already correct
-
-                process_sip(sip_file)   # ✅ FIXED (removed engine)
-
-                st.success("✅ SIP Loaded into Bronze")
-
-             except Exception:
-
-                st.error("❌ SIP ETL Failed")
-                st.code(traceback.format_exc())
-
-                st.session_state.extracted = True
-
-                st.success("🎉 Extraction Completed Successfully.")
+        st.session_state.extracted = True
+        st.success("🎉 Extraction Completed")
 
     except Exception:
-
         st.error("❌ Extraction Failed")
-
         st.code(traceback.format_exc())
 
-
-# =====================================
-# TRANSFORM
-# =====================================
 if btn_transform:
 
     if not st.session_state.extracted:
-        st.warning("⚠️ Run Extract first.")
-        st.stop()
+            st.warning("⚠️ Run Extract first.")
+            st.stop()
 
     try:
         from transformations.transform import load_silver
 
-        st.info("🟡 Running Silver Transformation...")
-
-        # EXISTING
+        st.info("🟡 Transforming...")
         load_silver()
 
+        st.success("✅ Transformation Done")
 
     except Exception:
         st.error("❌ Transform Failed")

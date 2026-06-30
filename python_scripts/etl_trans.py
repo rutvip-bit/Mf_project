@@ -2,9 +2,6 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine
 
-# =========================
-# POSTGRES CONNECTION
-# =========================
 engine = create_engine(
     "postgresql+psycopg2://postgres:postgres123@localhost:5432/tr_project"
 )
@@ -12,8 +9,8 @@ engine = create_engine(
 # =========================
 # CLEAN FUNCTIONS
 # =========================
-def clean_columns(df):
 
+def clean_columns(df):
     if df is None:
         return df
 
@@ -28,50 +25,29 @@ def clean_columns(df):
         .str.replace("-", "_", regex=False)
         .str.replace("/", "_", regex=False)
     )
-
     return df
 
 
-def clean_value(v):
-
-    if pd.isna(v):
-        return ""
-
-    if isinstance(v, pd.Timestamp):
-        return str(v.date())
-
-    return str(v).strip()
-
-
 def get(df, col):
-
     if df is None:
         return pd.Series([])
-
     if col in df.columns:
         return df[col]
-
     return pd.Series([""] * len(df), index=df.index)
 
 
 def normalize(df):
-
     if df is None:
         return df
 
     df = df.copy()
 
     for col in df.columns:
-
         df[col] = (
             df[col]
             .fillna("")
             .astype(str)
             .str.strip()
-        )
-
-        df[col] = (
-            df[col]
             .replace("nan", "")
             .replace("None", "")
             .replace("<NA>", "")
@@ -80,22 +56,23 @@ def normalize(df):
     return df
 
 
-# =========================
-# MAIN FUNCTION
-# =========================
+def clean_value(v):
+    if pd.isna(v):
+        return ""
+    return str(v).strip()
+
 def process_transactions(cams=None, kfin=None):
 
     dfs = []
 
     # =========================
-    # CAMS
+    # CAMS MAPPING
     # =========================
     if cams is not None:
 
         cams = clean_columns(cams)
 
         cams_df = pd.DataFrame({
-
             "source_system": "CAMS",
             "prod": get(cams, "prod"),
             "folio_no": get(cams, "folio_no"),
@@ -120,24 +97,12 @@ def process_transactions(cams=None, kfin=None):
             "report_date": get(cams, "rep_date"),
             "pan": get(cams, "pan"),
 
-            # CAMS UNIQUE
+            # unique CAMS
             "prodcode": get(cams, "prodcode"),
             "usercode": get(cams, "usercode"),
             "usrtrxno": get(cams, "usrtrxno"),
             "purprice": get(cams, "purprice"),
             "subbrok": get(cams, "subbrok"),
-            "altfolio": get(cams, "altfolio"),
-            "time1": get(cams, "time1"),
-            "trxnsubtyp": get(cams, "trxnsubtyp"),
-            "applicatio": get(cams, "applicatio"),
-            "trxn_natur": get(cams, "trxn_natur"),
-            "tax": get(cams, "tax"),
-            "total_tax": get(cams, "total_tax"),
-            "stt": get(cams, "stt"),
-            "scheme_typ": get(cams, "scheme_typ"),
-            "scanrefno": get(cams, "scanrefno"),
-            "exchange_flag": get(cams, "exchange_f"),
-            "stamp_duty": get(cams, "stamp_duty"),
 
             "source": "CAMS"
         })
@@ -146,14 +111,13 @@ def process_transactions(cams=None, kfin=None):
         dfs.append(cams_df)
 
     # =========================
-    # KFIN
+    # KFIN MAPPING
     # =========================
     if kfin is not None:
 
         kfin = clean_columns(kfin)
 
         kfin_df = pd.DataFrame({
-
             "source_system": "KFIN",
             "prod": get(kfin, "fmcode"),
             "folio_no": get(kfin, "td_acno"),
@@ -178,39 +142,28 @@ def process_transactions(cams=None, kfin=None):
             "report_date": get(kfin, "crdate"),
             "pan": get(kfin, "pangno"),
 
-            # KFIN UNIQUE (minimal)
+            # unique KFIN
             "sno": get(kfin, "sno"),
             "td_fund": get(kfin, "td_fund"),
-            "schpln": get(kfin, "schpln"),
-            "divopt": get(kfin, "divopt"),
             "chqno": get(kfin, "chqno"),
-            "mobile": get(kfin, "mobile"),
-            "email": get(kfin, "email"),
-            "trflag": get(kfin, "trflag"),
+
             "source": "KFIN"
         })
 
         kfin_df = normalize(kfin_df)
         dfs.append(kfin_df)
 
-    # =========================
-    # NO FILES
-    # =========================
-    if not dfs:
-        print("No transaction files found.")
-        return
+        if not dfs:
+             print("No transaction files found.")
+             return
 
-    # =========================
-    # COMBINE DATA
-    # =========================
     df = pd.concat(dfs, ignore_index=True)
-
-    df = df.apply(lambda col: col.map(clean_value))
+    df = df.applymap(clean_value)
     df = normalize(df)
 
-    # =========================
-    # LOAD EXISTING DATA
-    # =========================
+    df["created_at"] = pd.Timestamp.now()
+    df["updated_at"] = pd.Timestamp.now()
+
     existing = pd.read_sql(
         "SELECT * FROM bronze.transaction",
         engine
@@ -219,54 +172,49 @@ def process_transactions(cams=None, kfin=None):
     existing = normalize(existing)
 
     # =========================
-    # MATCH STRUCTURE
+    # FIRST LOAD CHECK
     # =========================
-    df = df.reindex(columns=existing.columns, fill_value="")
-    existing = existing.reindex(columns=df.columns, fill_value="")
+    if existing.empty:
+        df["flag"] = 0
 
-    # Convert everything to string
-    df = df.fillna("").astype(str)
-    existing = existing.fillna("").astype(str)
+    else:
+        ignore_cols = {"created_at", "updated_at", "flag"}
 
-    # Remove leading/trailing spaces
-    for col in df.columns:
-        df[col] = df[col].str.strip()
+        compare_cols = [
+            c for c in df.columns
+            if c in existing.columns and c not in ignore_cols
+        ]
 
-    for col in existing.columns:
-        existing[col] = existing[col].str.strip()
+        df_cmp = df[compare_cols].astype(str).fillna("")
+        ex_cmp = existing[compare_cols].astype(str).fillna("")
 
-    # =========================
-    # FLAG DUPLICATES
-    # 0 = New Record
-    # 1 = Already Exists in PostgreSQL
-    # =========================
-    compare_cols = [col for col in df.columns if col != "flag"]
+        existing_set = set(
+            ex_cmp.apply(lambda x: "|".join(x.values), axis=1)
+        )
 
-    existing_rows = set(
-        map(tuple, existing[compare_cols].values.tolist())
-    )
+        df["flag"] = (
+            df_cmp.apply(lambda x: "|".join(x.values), axis=1)
+            .isin(existing_set)
+            .astype(int)
+        )
 
-    duplicate_mask = df[compare_cols].apply(tuple, axis=1).isin(existing_rows)
+    # remove column if not in DB
+    if "source" not in existing.columns:
+        df = df.drop(columns=["source"], errors="ignore")
 
-    df["flag"] = duplicate_mask.astype(int)
+    df = df.where(pd.notnull(df), None)
 
-    print(f"Incoming rows  : {len(df)}")
-    print(f"Existing rows  : {len(existing)}")
-    print(f"Duplicate rows : {duplicate_mask.sum()}")
-    print(f"Unique rows    : {(~duplicate_mask).sum()}")
+    print("Incoming rows:", len(df))
+    print("Duplicate rows:", df["flag"].sum())
 
-    # =========================
-    # INSERT ALL ROWS
-    # =========================
     df.to_sql(
         "transaction",
         engine,
-     schema="bronze",
+        schema="bronze",
         if_exists="append",
         index=False,
         chunksize=5000,
         method="multi"
     )
 
-    print(f"{len(df)} rows inserted successfully.")
-    print("Transaction ETL Completed Successfully.")
+    print("Transaction ETL Completed Successfully")

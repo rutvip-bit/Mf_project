@@ -6,78 +6,76 @@ engine = create_engine(
 )
 
 
+def safe_read(query):
+    try:
+        return pd.read_sql(query, engine)
+    except Exception:
+        return pd.DataFrame()
+
+
 def load_silver():
 
-    # --------------------------
-    # Investor Master
-    # --------------------------
-    investor_df = pd.read_sql(
-        """
-        SELECT *
-        FROM bronze.investor_master
+    # =========================
+    # INVESTOR MASTER
+    # =========================
+    investor_df = safe_read("""
+        SELECT * FROM bronze.investor_master
         WHERE flag = 0
-        """,
-        engine
-    )
+    """)
 
-    investor_df = investor_df.drop(columns=["flag"], errors="ignore")
+    if not investor_df.empty:
+        investor_df = investor_df.drop(columns=["flag"], errors="ignore")
 
-    investor_df.to_sql(
-        "investor_master",
-        engine,
-        schema="silver",
-        if_exists="replace",
-        index=False,
-        chunksize=5000,
-        method="multi"
-    )
+        investor_df.to_sql(
+            "investor_master",
+            engine,
+            schema="silver",
+            if_exists="replace",
+            index=False,
+            chunksize=5000,
+            method="multi"
+        )
 
-    # --------------------------
-    # Transaction
-    # --------------------------
-    transaction_df = pd.read_sql(
-        """
-        SELECT *
-        FROM bronze.transaction
+    # =========================
+    # TRANSACTION
+    # =========================
+    transaction_df = safe_read("""
+        SELECT * FROM bronze.transaction
         WHERE flag = 0
-        """,
-        engine
-    )
+    """)
 
-    transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
+    if not transaction_df.empty:
+        transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
 
-    transaction_df.to_sql(
-        "transaction",
-        engine,
-        schema="silver",
-        if_exists="replace",
-        index=False,
-        chunksize=5000,
-        method="multi"
-    )
+        transaction_df.to_sql(
+            "transaction",
+            engine,
+            schema="silver",
+            if_exists="replace",
+            index=False,
+            chunksize=5000,
+            method="multi"
+        )
 
-    # --------------------------
-    # SIP (NEW ADDITION)
-    # --------------------------
-    sip_df = pd.read_sql(
-        """
-        SELECT *
-        FROM bronze.sip_info
+    # =========================
+    # SIP (OPTIONAL SAFE)
+    # =========================
+    sip_df = safe_read("""
+        SELECT * FROM bronze.sip_info
         WHERE flag = 0
-        """,
-        engine
-    )
+    """)
 
-    sip_df = sip_df.drop(columns=["flag"], errors="ignore")
+    if not sip_df.empty:
+        sip_df = sip_df.drop(columns=["flag"], errors="ignore")
 
-    sip_df.to_sql(
-        "sip_info",
-        engine,
-        schema="silver",
-        if_exists="replace",
-        index=False,
-        chunksize=5000,
-        method="multi"
-    )
+        sip_df.to_sql(
+            "sip_info",
+            engine,
+            schema="silver",
+            if_exists="replace",
+            index=False,
+            chunksize=5000,
+            method="multi"
+        )
 
-    print("Silver Layer Loaded Successfully.")
+    print("Silver Layer Loaded Successfully")
