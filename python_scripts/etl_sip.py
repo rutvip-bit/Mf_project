@@ -150,7 +150,7 @@ def process_sip(file):
     # DUPLICATE LOGIC
     # =====================================================
     try:
-        existing = pd.read_sql('SELECT "umrncode" FROM bronze.sip_info', engine)
+        existing = pd.read_sql('SELECT "umrncode" FROM bronze.sip_master', engine)
     except:
         existing = pd.DataFrame(columns=["umrncode"])
 
@@ -169,7 +169,7 @@ def process_sip(file):
     df = df.where(pd.notnull(df), None)
 
     df.to_sql(
-        "sip_info",
+        "sip_master",
         engine,
         schema="bronze",
         if_exists="append",

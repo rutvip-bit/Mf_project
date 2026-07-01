@@ -1,5 +1,5 @@
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from datetime import datetime
 
 engine = create_engine(
@@ -7,6 +7,9 @@ engine = create_engine(
 )
 
 
+# =====================================================
+# SAFE READ
+# =====================================================
 def safe_read(query):
     try:
         return pd.read_sql(query, engine)
@@ -14,14 +17,28 @@ def safe_read(query):
         return pd.DataFrame()
 
 
+# =====================================================
+# MARK BRONZE ROWS AS PROCESSED
+# =====================================================
+def mark_done(table_name):
+    with engine.begin() as conn:
+        conn.execute(text(f"""
+            UPDATE bronze.{table_name}
+            SET flag = 1
+            WHERE flag = 0
+        """))
+
+
+# =====================================================
+# SILVER LOAD PIPELINE
+# =====================================================
 def load_silver():
 
-    # Timestamp for this transformation run
     transform_time = datetime.now()
 
-    # =========================
+    # =====================================================
     # INVESTOR MASTER
-    # =========================
+    # =====================================================
     investor_df = safe_read("""
         SELECT *
         FROM bronze.investor_master
@@ -32,11 +49,8 @@ def load_silver():
 
         investor_df = investor_df.drop(columns=["flag"], errors="ignore")
 
-        if "created_at" in investor_df.columns:
-            investor_df["created_at"] = transform_time
-
-        if "updated_at" in investor_df.columns:
-            investor_df["updated_at"] = transform_time
+        investor_df["created_at"] = transform_time
+        investor_df["updated_at"] = transform_time
 
         investor_df.to_sql(
             "investor_master",
@@ -48,9 +62,11 @@ def load_silver():
             method="multi"
         )
 
-    # =========================
-    # TRANSACTION
-    # =========================
+        mark_done("investor_master")
+
+    # =====================================================
+    # TRANSACTION MASTER
+    # =====================================================
     transaction_df = safe_read("""
         SELECT *
         FROM bronze.transaction_master
@@ -61,11 +77,8 @@ def load_silver():
 
         transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
 
-        if "created_at" in transaction_df.columns:
-            transaction_df["created_at"] = transform_time
-
-        if "updated_at" in transaction_df.columns:
-            transaction_df["updated_at"] = transform_time
+        transaction_df["created_at"] = transform_time
+        transaction_df["updated_at"] = transform_time
 
         transaction_df.to_sql(
             "transaction_master",
@@ -77,9 +90,11 @@ def load_silver():
             method="multi"
         )
 
-    # =========================
-    # SIP INFO
-    # =========================
+        mark_done("transaction_master")
+
+    # =====================================================
+    # SIP MASTER
+    # =====================================================
     sip_df = safe_read("""
         SELECT *
         FROM bronze.sip_master
@@ -90,11 +105,8 @@ def load_silver():
 
         sip_df = sip_df.drop(columns=["flag"], errors="ignore")
 
-        if "created_at" in sip_df.columns:
-            sip_df["created_at"] = transform_time
-
-        if "updated_at" in sip_df.columns:
-            sip_df["updated_at"] = transform_time
+        sip_df["created_at"] = transform_time
+        sip_df["updated_at"] = transform_time
 
         sip_df.to_sql(
             "sip_master",
@@ -106,8 +118,13 @@ def load_silver():
             method="multi"
         )
 
-    print("Silver Layer Loaded Successfully")
+        mark_done("sip_master")
+
+    print("✔ Silver Layer Loaded Successfully")
 
 
+# =====================================================
+# RUN DIRECTLY
+# =====================================================
 if __name__ == "__main__":
     load_silver()
