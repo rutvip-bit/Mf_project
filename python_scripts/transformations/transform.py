@@ -1,5 +1,6 @@
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
+from datetime import datetime
 
 engine = create_engine(
     "postgresql+psycopg2://postgres:postgres123@localhost:5432/tr_project"
@@ -15,6 +16,9 @@ def safe_read(query):
 
 def load_silver():
 
+    # Timestamp for this transformation run
+    transform_time = datetime.now()
+
     # =========================
     # INVESTOR MASTER
     # =========================
@@ -28,8 +32,11 @@ def load_silver():
 
         investor_df = investor_df.drop(columns=["flag"], errors="ignore")
 
-        with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE silver.investor_master"))
+        if "created_at" in investor_df.columns:
+            investor_df["created_at"] = transform_time
+
+        if "updated_at" in investor_df.columns:
+            investor_df["updated_at"] = transform_time
 
         investor_df.to_sql(
             "investor_master",
@@ -54,8 +61,11 @@ def load_silver():
 
         transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
 
-        with engine.begin() as conn:
-            conn.execute(text('TRUNCATE TABLE silver."transaction"'))
+        if "created_at" in transaction_df.columns:
+            transaction_df["created_at"] = transform_time
+
+        if "updated_at" in transaction_df.columns:
+            transaction_df["updated_at"] = transform_time
 
         transaction_df.to_sql(
             "transaction",
@@ -80,8 +90,11 @@ def load_silver():
 
         sip_df = sip_df.drop(columns=["flag"], errors="ignore")
 
-        with engine.begin() as conn:
-            conn.execute(text("TRUNCATE TABLE silver.sip_info"))
+        if "created_at" in sip_df.columns:
+            sip_df["created_at"] = transform_time
+
+        if "updated_at" in sip_df.columns:
+            sip_df["updated_at"] = transform_time
 
         sip_df.to_sql(
             "sip_info",
@@ -94,3 +107,7 @@ def load_silver():
         )
 
     print("Silver Layer Loaded Successfully")
+
+
+if __name__ == "__main__":
+    load_silver()
