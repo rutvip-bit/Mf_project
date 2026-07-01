@@ -3,7 +3,7 @@ import pandas as pd
 import traceback
 
 st.set_page_config(
-    page_title="Mutual Fund",
+    page_title="Intelliwealth",
     page_icon="📊",
     layout="wide"
 )
@@ -12,7 +12,7 @@ st.set_page_config(
 # HEADER (UNCHANGED UI)
 # ==============================
 st.markdown(
-    "<h1 style='text-align:center;'>📊 Mutual Fund ETL Dashboard</h1>",
+    "<h1 style='text-align:center;'>📊 Mutual Funds Dashboard</h1>",
     unsafe_allow_html=True
 )
 
@@ -41,27 +41,38 @@ def is_valid(df):
 
 
 # ==============================
-# FILE UPLOAD UI (UNCHANGED)
+# FILE UPLOAD UI (FIXED RESET)
 # ==============================
 st.subheader("📂 Upload CAMS / KFintech Excel Files")
 
-col1, col2 = st.columns([10, 2], vertical_alignment="center")
+# initialize uploader key (IMPORTANT)
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
 
-with col1:
+top_col1, top_col2 = st.columns([10, 2])
+
+with top_col1:
     uploaded_files = st.file_uploader(
         "Upload Files",
         type=["xlsx"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key=f"uploader_{st.session_state.uploader_key}"   # 🔥 THIS IS THE FIX
     )
 
-with col2:
-    st.markdown("<br>", unsafe_allow_html=True)
+with top_col2:
+    st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
 
     if st.button("🗑 Clear", use_container_width=True):
+
+        # 🔥 increment key → forces full reset of uploader
+        st.session_state.uploader_key += 1
+
+        # reset everything
         st.session_state.extracted = False
         st.session_state.transformed = False
         st.session_state.bronze_data = {}
         st.session_state.silver_data = {}
+
         st.rerun()
 
 st.divider()
