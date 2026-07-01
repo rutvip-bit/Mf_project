@@ -53,7 +53,7 @@ def load_silver():
     # =========================
     transaction_df = safe_read("""
         SELECT *
-        FROM bronze."transaction"
+        FROM bronze.transaction_master
         WHERE flag = 0
     """)
 
@@ -68,7 +68,7 @@ def load_silver():
             transaction_df["updated_at"] = transform_time
 
         transaction_df.to_sql(
-            "transaction",
+            "transaction_master",
             engine,
             schema="silver",
             if_exists="append",
@@ -82,7 +82,7 @@ def load_silver():
     # =========================
     sip_df = safe_read("""
         SELECT *
-        FROM bronze.sip_info
+        FROM bronze.sip_master
         WHERE flag = 0
     """)
 
@@ -97,7 +97,7 @@ def load_silver():
             sip_df["updated_at"] = transform_time
 
         sip_df.to_sql(
-            "sip_info",
+            "sip_master",
             engine,
             schema="silver",
             if_exists="append",

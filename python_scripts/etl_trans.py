@@ -165,7 +165,7 @@ def process_transactions(cams=None, kfin=None):
     df["updated_at"] = pd.Timestamp.now()
 
     existing = pd.read_sql(
-        "SELECT * FROM bronze.transaction",
+        "SELECT * FROM bronze.transaction_master",
         engine
     )
 
@@ -208,7 +208,7 @@ def process_transactions(cams=None, kfin=None):
     print("Duplicate rows:", df["flag"].sum())
 
     df.to_sql(
-        "transaction",
+        "transaction_master",
         engine,
         schema="bronze",
         if_exists="append",
