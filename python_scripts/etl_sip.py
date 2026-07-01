@@ -141,9 +141,9 @@ def process_sip(file):
     # =====================================================
     # AUDIT COLUMNS
     # =====================================================
-    current_time = pd.Timestamp.now()
-    df["created_at"] = current_time
-    df["updated_at"] = current_time
+    ##current_time = pd.Timestamp.now()##
+    ##df["created_at"] = current_time##
+    ##df["updated_at"] = current_time##
     df["flag"] = 0
 
     # =====================================================
