@@ -2,7 +2,7 @@ import pandas as pd
 from sqlalchemy import create_engine
  
 engine = create_engine(
-    "postgresql+psycopg2://postgres:postgres123@localhost:5432/InteliWealth"
+    "postgresql+psycopg2://postgres:postgres123@localhost:5432/tr_project"
 )
  
  
@@ -44,7 +44,7 @@ def load_silver():
     transaction_df = pd.read_sql(
         """
         SELECT *
-        FROM bronze.transaction
+        FROM bronze.transaction_master
         WHERE flag = 0
         """,
         engine
@@ -58,7 +58,7 @@ def load_silver():
     transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
  
     transaction_df.to_sql(
-        "transaction",
+        "transaction_master",
         engine,
         schema="silver",
         if_exists="replace",
@@ -73,13 +73,13 @@ def load_silver():
     sip_df = pd.read_sql(
         """
         SELECT *
-        FROM bronze.sip_info
+        FROM bronze.sip_master
         WHERE flag = 0
         """,
         engine
     )
  
-    sip_df = transform_sip_info(sip_df)
+    sip_df = transform_sip_master(sip_df)
  
     # Round decimal columns
     sip_df = round_decimal_columns(sip_df)
@@ -87,7 +87,7 @@ def load_silver():
     sip_df = sip_df.drop(columns=["flag"], errors="ignore")
  
     sip_df.to_sql(
-        "sip_info",
+        "sip_master",
         engine,
         schema="silver",
         if_exists="replace",
@@ -381,9 +381,9 @@ def transform_transaction(df):
  
 #SIP Transformation
  
-def transform_sip_info(df):
+def transform_sip_master(df):
     """
-    Bronze -> Silver Transformation for SIP Info
+    Bronze -> Silver Transformation for SIP Master
     """
  
     df = df.copy()

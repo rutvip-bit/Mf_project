@@ -69,7 +69,6 @@ def normalize(df):
 
     for col in df.columns:
 
-        # Skip date columns
         if col in DATE_COLUMNS:
             continue
 
@@ -88,6 +87,37 @@ def normalize(df):
                 "NaT": ""
             })
         )
+
+    return df
+
+
+# =====================================================
+# CLEAN IDENTIFIER
+# =====================================================
+
+def clean_identifier(df, column):
+
+    if df is None:
+        return df
+
+    if column not in df.columns:
+        return df
+
+    df = df.copy()
+
+    df[column] = (
+        df[column]
+        .fillna("")
+        .astype(str)
+        .str.strip()
+        .str.replace(r"\.0$", "", regex=True)
+        .replace({
+            "": None,
+            "nan": None,
+            "None": None,
+            "<NA>": None
+        })
+    )
 
     return df
 
@@ -121,6 +151,9 @@ def clean_value(value):
 
 def format_dates(df):
 
+    if df is None:
+        return df
+
     df = df.copy()
 
     for col in DATE_COLUMNS:
@@ -145,7 +178,7 @@ def format_dates(df):
 
 
 # =====================================================
-# APPLY MAPPING
+# APPLY INVESTOR MAPPING
 # =====================================================
 
 def apply_investor_mapping(raw_df, mapping):
@@ -184,6 +217,7 @@ def apply_investor_mapping(raw_df, mapping):
 
     return mapped_df
 
+
 # =====================================================
 # PROCESS INVESTOR MASTER
 # =====================================================
@@ -205,6 +239,11 @@ def process_investor_master(cams=None, kfin=None):
 
         cams_df = normalize(cams_df)
 
+        cams_df = clean_identifier(
+            cams_df,
+            "folio_no"
+        )
+
         cams_df = format_dates(cams_df)
 
         dfs.append(cams_df)
@@ -221,6 +260,11 @@ def process_investor_master(cams=None, kfin=None):
         )
 
         kfin_df = normalize(kfin_df)
+
+        kfin_df = clean_identifier(
+            kfin_df,
+            "folio_no"
+        )
 
         kfin_df = format_dates(kfin_df)
 
@@ -244,18 +288,10 @@ def process_investor_master(cams=None, kfin=None):
         ignore_index=True
     )
 
-    # =====================================================
-    # AUDIT COLUMNS
-    # =====================================================
-
     now = pd.Timestamp.now()
 
     df["created_at"] = now
     df["updated_at"] = now
-
-    # =====================================================
-    # LOAD EXISTING DATA
-    # =====================================================
 
     try:
 
@@ -265,13 +301,19 @@ def process_investor_master(cams=None, kfin=None):
         )
 
         existing = normalize(existing)
+
+        existing = clean_identifier(
+            existing,
+            "folio_no"
+        )
+
         existing = format_dates(existing)
 
     except Exception:
 
         existing = pd.DataFrame()
 
-    # =====================================================
+            # =====================================================
     # DUPLICATE FLAG
     # =====================================================
 
@@ -302,6 +344,28 @@ def process_investor_master(cams=None, kfin=None):
         new_df = df[compare_cols].copy()
 
         old_df = existing[compare_cols].copy()
+
+        # =====================================================
+        # CLEAN IDENTIFIER BEFORE COMPARISON
+        # =====================================================
+
+        if "folio_no" in new_df.columns:
+
+            new_df = clean_identifier(
+                new_df,
+                "folio_no"
+            )
+
+        if "folio_no" in old_df.columns:
+
+            old_df = clean_identifier(
+                old_df,
+                "folio_no"
+            )
+
+        # =====================================================
+        # NORMALIZE VALUES
+        # =====================================================
 
         for col in compare_cols:
 
@@ -341,6 +405,10 @@ def process_investor_master(cams=None, kfin=None):
                     .str.strip()
                 )
 
+        # =====================================================
+        # COMPARE COMPLETE ROW
+        # =====================================================
+
         new_keys = new_df.agg("|".join, axis=1)
 
         old_keys = set(
@@ -349,7 +417,16 @@ def process_investor_master(cams=None, kfin=None):
 
         df["flag"] = new_keys.isin(old_keys).astype(int)
 
-            # =====================================================
+    # =====================================================
+    # CLEAN IDENTIFIER AGAIN BEFORE INSERT
+    # =====================================================
+
+    df = clean_identifier(
+        df,
+        "folio_no"
+    )
+
+    # =====================================================
     # GET COLUMN ORDER FROM POSTGRES
     # =====================================================
 
@@ -371,6 +448,7 @@ def process_investor_master(cams=None, kfin=None):
     for col in db_columns:
 
         if col not in df.columns:
+
             df[col] = None
 
     # =====================================================
@@ -387,17 +465,20 @@ def process_investor_master(cams=None, kfin=None):
 
         if col in df.columns:
 
-            df[col] = pd.to_datetime(
-                df[col],
-                errors="coerce"
-            ).dt.date
+            df[col] = (
+                pd.to_datetime(
+                    df[col],
+                    errors="coerce"
+                )
+                .dt.date
+            )
 
             df[col] = df[col].where(
                 pd.notnull(df[col]),
                 None
             )
 
-    # =====================================================
+        # =====================================================
     # CLEAN NON-DATE COLUMNS
     # =====================================================
 
@@ -415,6 +496,16 @@ def process_investor_master(cams=None, kfin=None):
                     "NaT": None
                 })
             )
+
+    # =====================================================
+    # FINAL CLEAN IDENTIFIER
+    # (ENSURES .0 NEVER REACHES POSTGRES)
+    # =====================================================
+
+    df = clean_identifier(
+        df,
+        "folio_no"
+    )
 
     # =====================================================
     # DEBUG DATE COLUMNS
@@ -446,7 +537,7 @@ def process_investor_master(cams=None, kfin=None):
     df = df.where(pd.notnull(df), None)
 
     # =====================================================
-    # FINAL SAFETY CHECK
+    # FINAL SAFETY CHECK FOR DATE COLUMNS
     # =====================================================
 
     for col in DATE_COLUMNS:
@@ -460,13 +551,26 @@ def process_investor_master(cams=None, kfin=None):
                 col
             ] = None
 
-                # =====================================================
+    # =====================================================
+    # FINAL CLEAN IDENTIFIER
+    # =====================================================
+
+    df = clean_identifier(
+        df,
+        "folio_no"
+    )
+
+    # =====================================================
     # REMOVE EXACT DUPLICATE ROWS
     # =====================================================
 
     before = len(df)
 
-    df = df.drop_duplicates(keep="first").reset_index(drop=True)
+    df = (
+        df
+        .drop_duplicates(keep="first")
+        .reset_index(drop=True)
+    )
 
     print(f"Removed {before - len(df)} exact duplicate rows")
 
@@ -499,3 +603,5 @@ def process_investor_master(cams=None, kfin=None):
     print("Investor Master Loaded Successfully")
     print(f"Inserted {len(df)} rows")
     print("=" * 80)
+
+    return df
