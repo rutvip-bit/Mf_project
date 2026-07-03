@@ -1,7 +1,14 @@
 import pandas as pd
+import numpy as np
+
 from sqlalchemy import create_engine
 
 from mapping import INVESTOR_MASTER_MAPPING
+
+
+# =====================================================
+# DATABASE CONNECTION
+# =====================================================
 
 engine = create_engine(
     "postgresql+psycopg2://postgres:postgres123@localhost:5432/tr_project"
@@ -11,7 +18,11 @@ engine = create_engine(
 # =====================================================
 # CLEAN COLUMN NAMES
 # =====================================================
+
 def clean_columns(df):
+
+    if df is None:
+        return df
 
     df = df.copy()
 
@@ -20,60 +31,47 @@ def clean_columns(df):
         .str.lower()
         .str.strip()
         .str.replace(" ", "_", regex=False)
-        .str.replace("#", "", regex=False)
         .str.replace("-", "_", regex=False)
         .str.replace("/", "_", regex=False)
+        .str.replace("#", "", regex=False)
     )
 
     return df
 
 
 # =====================================================
-# SAFE GET
+# DATE COLUMNS
 # =====================================================
-def get(df, cols):
 
-    if isinstance(cols, str):
-        cols = [cols]
-
-    for col in cols:
-
-        col = (
-            col.lower()
-            .replace(" ", "_")
-            .replace("#", "")
-            .replace("-", "_")
-            .replace("/", "_")
-        )
-
-        if col in df.columns:
-            return df[col]
-
-    return pd.Series([None] * len(df), index=df.index)
-
-
-# =====================================================
-# APPLY MAPPING
-# =====================================================
-def apply_mapping(df):
-
-    mapped = {}
-
-    for target, source_cols in INVESTOR_MASTER_MAPPING.items():
-
-        mapped[target] = get(df, source_cols)
-
-    return pd.DataFrame(mapped)
+DATE_COLUMNS = [
+    "dob",
+    "report_date",
+    "rep_date",
+    "folio_date",
+    "jh1_dob",
+    "jh2_dob",
+    "guardian_dob",
+    "lastupdateddate",
+    "nominee_dob"
+]
 
 
 # =====================================================
 # NORMALIZE
 # =====================================================
+
 def normalize(df):
+
+    if df is None:
+        return df
 
     df = df.copy()
 
     for col in df.columns:
+
+        # Skip date columns
+        if col in DATE_COLUMNS:
+            continue
 
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             continue
@@ -95,115 +93,170 @@ def normalize(df):
 
 
 # =====================================================
-# REMOVE .0
+# CLEAN VALUE
 # =====================================================
-def clean_identifier(df, column):
 
-    if column not in df.columns:
-        return df
+def clean_value(value):
 
-    df[column] = (
-        df[column]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .str.replace(r"\.0$", "", regex=True)
-    )
+    if pd.isna(value):
+        return None
+
+    value = str(value).strip()
+
+    if value.lower() in [
+        "",
+        "nan",
+        "none",
+        "<na>",
+        "nat"
+    ]:
+        return None
+
+    return value
+
+
+# =====================================================
+# FORMAT DATE COLUMNS
+# =====================================================
+
+def format_dates(df):
+
+    df = df.copy()
+
+    for col in DATE_COLUMNS:
+
+        if col in df.columns:
+
+            df[col] = (
+                pd.to_datetime(
+                    df[col],
+                    errors="coerce",
+                    dayfirst=False
+                )
+                .dt.date
+            )
+
+            df[col] = df[col].where(
+                pd.notnull(df[col]),
+                None
+            )
 
     return df
 
 
 # =====================================================
-# PROCESS
+# APPLY MAPPING
 # =====================================================
-def process_investor_master(cams=None, kfin=None):
 
-    mapped_frames = []
+def apply_investor_mapping(raw_df, mapping):
 
-    # -------------------------------------------------
-    # CAMS
-    # -------------------------------------------------
-    if cams is not None and not cams.empty:
+    raw_df = clean_columns(raw_df)
 
-        cams = clean_columns(cams)
-        cams = apply_mapping(cams)
+    mapped_df = pd.DataFrame(index=raw_df.index)
 
-        mapped_frames.append(cams)
+    for target_col, source_cols in mapping.items():
 
-    # -------------------------------------------------
-    # KFIN
-    # -------------------------------------------------
-    if kfin is not None and not kfin.empty:
+        if target_col in [
+            "flag",
+            "created_at",
+            "updated_at"
+        ]:
+            continue
 
-        kfin = clean_columns(kfin)
-        kfin = apply_mapping(kfin)
+        value = None
 
-        mapped_frames.append(kfin)
+        for src in source_cols:
 
-    # -------------------------------------------------
-    # NO DATA
-    # -------------------------------------------------
-    if not mapped_frames:
+            src = src.lower()
 
-        print("No Investor Master data found.")
-        return
+            if src in raw_df.columns:
+                value = raw_df[src]
+                break
 
-    # -------------------------------------------------
-    # MERGE
-    # -------------------------------------------------
-    df = pd.concat(mapped_frames, ignore_index=True)
+        if value is None:
 
-    # -------------------------------------------------
-    # NORMALIZE
-    # -------------------------------------------------
-    df = normalize(df)
-
-    # -------------------------------------------------
-    # REMOVE .0 FROM IDENTIFIERS
-    # -------------------------------------------------
-    identifier_cols = [
-        "folio_no",
-        "pan_no",
-        "joint1_pan",
-        "joint2_pan",
-        "guardian_pan",
-        "mobile_no",
-        "bank_account_no",
-        "broker_code",
-        "ifsc_code",
-        "pincode",
-        "dp_id",
-        "ckyc_no",
-        "jh1_ckyc",
-        "jh2_ckyc",
-        "guardian_ckyc_no"
-    ]
-
-    for col in identifier_cols:
-
-        df = clean_identifier(df, col)
-
-    # -------------------------------------------------
-    # DATE COLUMNS
-    # -------------------------------------------------
-    date_cols = [
-        "dob",
-        "report_date",
-        "folio_date"
-    ]
-
-    for col in date_cols:
-
-        if col in df.columns:
-
-            df[col] = pd.to_datetime(
-                df[col],
-                errors="coerce"
+            value = pd.Series(
+                [None] * len(raw_df),
+                index=raw_df.index
             )
 
-    # -------------------------------------------------
-    # EXISTING DATA
-    # -------------------------------------------------
+        mapped_df[target_col] = value
+
+    return mapped_df
+
+# =====================================================
+# PROCESS INVESTOR MASTER
+# =====================================================
+
+def process_investor_master(cams=None, kfin=None):
+
+    dfs = []
+
+    # =====================================================
+    # CAMS
+    # =====================================================
+
+    if cams is not None and not cams.empty:
+
+        cams_df = apply_investor_mapping(
+            cams,
+            INVESTOR_MASTER_MAPPING
+        )
+
+        cams_df = normalize(cams_df)
+
+        cams_df = format_dates(cams_df)
+
+        dfs.append(cams_df)
+
+    # =====================================================
+    # KFIN
+    # =====================================================
+
+    if kfin is not None and not kfin.empty:
+
+        kfin_df = apply_investor_mapping(
+            kfin,
+            INVESTOR_MASTER_MAPPING
+        )
+
+        kfin_df = normalize(kfin_df)
+
+        kfin_df = format_dates(kfin_df)
+
+        dfs.append(kfin_df)
+
+    # =====================================================
+    # NO FILES
+    # =====================================================
+
+    if not dfs:
+
+        print("No Investor Master file found.")
+        return
+
+    # =====================================================
+    # MERGE
+    # =====================================================
+
+    df = pd.concat(
+        dfs,
+        ignore_index=True
+    )
+
+    # =====================================================
+    # AUDIT COLUMNS
+    # =====================================================
+
+    now = pd.Timestamp.now()
+
+    df["created_at"] = now
+    df["updated_at"] = now
+
+    # =====================================================
+    # LOAD EXISTING DATA
+    # =====================================================
+
     try:
 
         existing = pd.read_sql(
@@ -212,22 +265,20 @@ def process_investor_master(cams=None, kfin=None):
         )
 
         existing = normalize(existing)
+        existing = format_dates(existing)
 
-        for col in identifier_cols:
-
-            existing = clean_identifier(existing, col)
-
-    except:
+    except Exception:
 
         existing = pd.DataFrame()
 
-    # -------------------------------------------------
+    # =====================================================
     # DUPLICATE FLAG
-    # -------------------------------------------------
-    ignore = {
+    # =====================================================
+
+    ignore_cols = {
+        "flag",
         "created_at",
-        "updated_at",
-        "flag"
+        "updated_at"
     }
 
     if existing.empty:
@@ -237,70 +288,214 @@ def process_investor_master(cams=None, kfin=None):
     else:
 
         compare_cols = [
+
             c
+
             for c in df.columns
-            if c in existing.columns and c not in ignore
+
+            if c in existing.columns
+
+            and c not in ignore_cols
+
         ]
 
-        df_cmp = df[compare_cols].copy()
-        ex_cmp = existing[compare_cols].copy()
+        new_df = df[compare_cols].copy()
 
-        # Normalize both dataframes identically
-        df_cmp = (
-            df_cmp.fillna("")
-            .astype(str)
-            .apply(lambda col: col.str.strip())
+        old_df = existing[compare_cols].copy()
+
+        for col in compare_cols:
+
+            if col in DATE_COLUMNS:
+
+                new_df[col] = (
+                    pd.to_datetime(
+                        new_df[col],
+                        errors="coerce"
+                    )
+                    .dt.strftime("%Y-%m-%d")
+                    .fillna("")
+                )
+
+                old_df[col] = (
+                    pd.to_datetime(
+                        old_df[col],
+                        errors="coerce"
+                    )
+                    .dt.strftime("%Y-%m-%d")
+                    .fillna("")
+                )
+
+            else:
+
+                new_df[col] = (
+                    new_df[col]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+
+                old_df[col] = (
+                    old_df[col]
+                    .fillna("")
+                    .astype(str)
+                    .str.strip()
+                )
+
+        new_keys = new_df.agg("|".join, axis=1)
+
+        old_keys = set(
+            old_df.agg("|".join, axis=1)
         )
 
-        ex_cmp = (
-            ex_cmp.fillna("")
-            .astype(str)
-            .apply(lambda col: col.str.strip())
-        )
+        df["flag"] = new_keys.isin(old_keys).astype(int)
 
-        df_keys = df_cmp.agg("|".join, axis=1)
-        ex_keys = set(ex_cmp.agg("|".join, axis=1))
+            # =====================================================
+    # GET COLUMN ORDER FROM POSTGRES
+    # =====================================================
 
-        df["flag"] = df_keys.isin(ex_keys).astype(int)
+    db_columns = pd.read_sql(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'bronze'
+        AND table_name = 'investor_master'
+        ORDER BY ordinal_position
+        """,
+        engine
+    )["column_name"].tolist()
 
-    # -------------------------------------------------
-    # AUDIT
-    # -------------------------------------------------
-    now = pd.Timestamp.now()
+    # =====================================================
+    # ADD MISSING COLUMNS
+    # =====================================================
 
-    df["created_at"] = now
-    df["updated_at"] = now
+    for col in db_columns:
 
-    # -------------------------------------------------
-    # REMOVE EXTRA COLUMNS
-    # -------------------------------------------------
-    if not existing.empty:
+        if col not in df.columns:
+            df[col] = None
 
-        extra = set(df.columns) - set(existing.columns)
+    # =====================================================
+    # KEEP ONLY DATABASE COLUMNS
+    # =====================================================
 
-        if extra:
+    df = df[db_columns]
 
-            df = df.drop(columns=list(extra))
+    # =====================================================
+    # FINAL DATE CLEANING
+    # =====================================================
 
-    # -------------------------------------------------
-    # NULLS
-    # -------------------------------------------------
+    for col in DATE_COLUMNS:
+
+        if col in df.columns:
+
+            df[col] = pd.to_datetime(
+                df[col],
+                errors="coerce"
+            ).dt.date
+
+            df[col] = df[col].where(
+                pd.notnull(df[col]),
+                None
+            )
+
+    # =====================================================
+    # CLEAN NON-DATE COLUMNS
+    # =====================================================
+
+    for col in df.columns:
+
+        if col not in DATE_COLUMNS:
+
+            df[col] = (
+                df[col]
+                .replace({
+                    "": None,
+                    "nan": None,
+                    "None": None,
+                    "<NA>": None,
+                    "NaT": None
+                })
+            )
+
+    # =====================================================
+    # DEBUG DATE COLUMNS
+    # =====================================================
+
+    print("=" * 80)
+    print("Checking DATE columns before insert")
+
+    for col in DATE_COLUMNS:
+
+        if col in df.columns:
+
+            print(f"{col} : {df[col].dtype}")
+
+            bad = df[df[col].astype(str) == ""]
+
+            if len(bad):
+
+                print(f"{col} has {len(bad)} empty strings")
+
+            print(df[col].head())
+
+    print("=" * 80)
+
+    # =====================================================
+    # REPLACE REMAINING NaN
+    # =====================================================
+
     df = df.where(pd.notnull(df), None)
 
-    print(f"Incoming Rows : {len(df)}")
-    print(f"Duplicate Rows: {df['flag'].sum()}")
+    # =====================================================
+    # FINAL SAFETY CHECK
+    # =====================================================
 
-    # -------------------------------------------------
-    # LOAD
-    # -------------------------------------------------
+    for col in DATE_COLUMNS:
+
+        if col in df.columns:
+
+            df.loc[
+                df[col].astype(str).isin(
+                    ["", "NaT", "nan", "None"]
+                ),
+                col
+            ] = None
+
+                # =====================================================
+    # REMOVE EXACT DUPLICATE ROWS
+    # =====================================================
+
+    before = len(df)
+
+    df = df.drop_duplicates(keep="first").reset_index(drop=True)
+
+    print(f"Removed {before - len(df)} exact duplicate rows")
+
+    # =====================================================
+    # FINAL COLUMN ORDER CHECK
+    # =====================================================
+
+    df = df[db_columns]
+
+    # =====================================================
+    # INSERT INTO POSTGRES
+    # =====================================================
+
+    print("=" * 80)
+    print("Loading Investor Master...")
+    print(f"Rows to insert : {len(df)}")
+    print("=" * 80)
+
     df.to_sql(
         "investor_master",
         engine,
         schema="bronze",
         if_exists="append",
         index=False,
-        chunksize=5000,
-        method="multi"
+        method="multi",
+        chunksize=5000
     )
 
-    print("Investor Master ETL Completed Successfully")
+    print("=" * 80)
+    print("Investor Master Loaded Successfully")
+    print(f"Inserted {len(df)} rows")
+    print("=" * 80)
