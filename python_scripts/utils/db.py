@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+
 import pandas as pd
  
 HOST = "localhost"
@@ -8,22 +9,37 @@ USER = "postgres"
 PASSWORD = "postgres123"
  
 engine = create_engine(
+
     f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
+
 )
- 
  
 def read_table(schema, table, limit=100):
  
-    try:
-        query = f"""
-            SELECT *
-            FROM {schema}.{table}
-            ORDER BY created_at DESC
-            LIMIT {limit}
-        """
+    query = f"""
+
+        SELECT *
+        FROM {schema}.{table}
+        ORDER BY created_at DESC
+        LIMIT {limit}
+
+    """
  
-        return pd.read_sql(query, engine)
+    df = pd.read_sql(query, engine)
  
-    except Exception as e:
-        print("READ ERROR:", e)
-        raise
+    # Convert UTC to IST for display
+
+    for col in ["created_at", "updated_at"]:
+
+        if col in df.columns:
+
+            df[col] = (
+
+                pd.to_datetime(df[col], utc=True)
+
+                  .dt.tz_convert("Asia/Kolkata")
+
+            )
+ 
+    return df
+ 

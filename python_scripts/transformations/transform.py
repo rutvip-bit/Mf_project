@@ -61,7 +61,7 @@ def load_silver():
 
     transaction_df = safe_read("""
         SELECT *
-        FROM bronze.transaction
+        FROM bronze.transaction_master
         WHERE flag = 0
     """)
 
@@ -74,7 +74,7 @@ def load_silver():
         transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
 
         transaction_df.to_sql(
-            "transaction",
+            "transaction_master",
             engine,
             schema="silver",
             if_exists="replace",
@@ -89,20 +89,20 @@ def load_silver():
 
     sip_df = safe_read("""
         SELECT *
-        FROM bronze.sip_info
+        FROM bronze.sip_master
         WHERE flag = 0
     """)
 
     if not sip_df.empty:
 
-        sip_df = transform_sip_info(sip_df)
+        sip_df = transform_sip_master(sip_df)
 
         sip_df = round_decimal_columns(sip_df)
 
         sip_df = sip_df.drop(columns=["flag"], errors="ignore")
 
         sip_df.to_sql(
-            "sip_info",
+            "sip_master",
             engine,
             schema="silver",
             if_exists="replace",
@@ -467,10 +467,10 @@ def transform_transaction(df):
 
 
 # =====================================================
-# SIP INFO TRANSFORMATION
+# SIP MASTER TRANSFORMATION
 # =====================================================
 
-def transform_sip_info(df):
+def transform_sip_master(df):
 
     df = df.copy()
 

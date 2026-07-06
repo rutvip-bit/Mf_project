@@ -25,7 +25,7 @@ INVESTOR_MASTER_MAPPING = {
     "email": ["email"],
     "phone_res": ["phone_res", "rphone"],
     "phone_off": ["phone_off", "ophone"],
-
+ 
     # ================= TAX / PAN =================
     "tax_status": ["tax_status", "status"],
     "holding_nature": ["holding_nature"],
@@ -459,95 +459,93 @@ TRANSACTION_MASTER_MAPPING = {
 # SIP MASTER MAPPING (SAFE + CLEAN)
 # Target: bronze.sip_master
 # =========================================================
-
 SIP_MASTER_MAPPING = {
 
-    # =========================
-    # LOCATION / ORGANIZATION
-    # =========================
-    "zone": "Zone",
-    "branch": "Branch",
-    "location": "Location",
+    # =====================================================
+    # LOCATION
+    # =====================================================
+    "zone": ["Zone"],
+    "branch": ["Branch"],
+    "location": ["Location"],
 
-    # =========================
+    # =====================================================
     # IDENTIFIERS
-    # =========================
-    "ihno": "Ihno",
-    "folio": "Folio",
+    # =====================================================
+    "ihno": ["Ihno"],
+    "folio": ["Folio"],
 
-    # =========================
+    # =====================================================
     # INVESTOR
-    # =========================
-    "investor_name": "Investor Name",
-    "pan": "PAN",
+    # =====================================================
+    "investor_name": ["Investor Name"],
+    "pan": ["PAN"],
 
-    # =========================
-    # SIP CORE DETAILS
-    # =========================
-    "sip_type": "SipType",
-    "sip_mode": "SIP Mode",
-    "frequency": "Frequency",
+    # =====================================================
+    # SIP DETAILS
+    # =====================================================
+    "registration_date": ["RegistrationDate"],
+    "start_date": ["Start Date"],
+    "end_date": ["End Date"],
+    "terminate_date": ["TerminateDate"],
 
-    "registration_date": "RegistrationDate",
-    "start_date": "Start Date",
-    "end_date": "End Date",
-    "terminate_date": "TerminateDate",
+    "no_of_installments": ["No Of Installments"],
+    "amount": ["Amount"],
 
-    "no_of_installments": "No Of Installments",
-    "amount": "Amount",
+    "sip_type": ["SipType"],
+    "sip_mode": ["SIP Mode"],
+    "frequency": ["Frequency"],
 
-    # =========================
-    # SCHEME / PRODUCT
-    # =========================
-    "scheme": "Scheme",
-    "plan": "Plan",
-    "scheme_name": "Scheme Name",
+    # =====================================================
+    # SCHEME
+    # =====================================================
+    "scheme": ["Scheme"],
+    "plan": ["Plan"],
+    "scheme_name": ["Scheme Name"],
 
-    "fund_code": "Fund Code",
-    "product_code": "Product Code",
+    "fund_code": ["Fund Code"],
+    "product_code": ["Product Code"],
 
-    "to_scheme": "To Scheme",
-    "to_plan": "To Plan",
-    "to_product_code": "ToProductCode",
-    "to_scheme_name": "ToSchemeName",
+    "to_scheme": ["To Scheme"],
+    "to_plan": ["To Plan"],
+    "to_product_code": ["ToProductCode"],
+    "to_scheme_name": ["ToSchemeName"],
 
-    # =========================
-    # AGENT / BROKER
-    # =========================
-    "agent_code": "AgentCode",
-    "agent_name": "AgentName",
-    "subbroker": "Subbroker",
+    # =====================================================
+    # AGENT
+    # =====================================================
+    "agent_code": ["AgentCode"],
+    "agent_name": ["AgentName"],
+    "subbroker": ["Subbroker"],
 
-    # =========================
-    # TRANSACTION TYPE
-    # =========================
-    "trtype": "Trtype",
+    # =====================================================
+    # TRANSACTION
+    # =====================================================
+    "trtype": ["Trtype"],
 
-    # =========================
+    # =====================================================
     # STATUS
-    # =========================
-    "status": "Status",
+    # =====================================================
+    "status": ["Status"],
 
-    # =========================
-    # BANK / ECS DETAILS
-    # =========================
-    "ecsno": "ECSNO",
-    "ecs_bank_name": "ECSBankName",
-    "ecs_acno": "ECSAcno",
-    "ecs_holder_name": "ECSHolderName",
+    # =====================================================
+    # ECS
+    # =====================================================
+    "ecsno": ["ECSNO"],
+    "ecs_bank_name": ["ECSBankName"],
+    "ecs_acno": ["ECSAcno"],
+    "ecs_holder_name": ["ECSHolderName"],
 
-    # =========================
-    # REGISTRATION META
-    # =========================
-    "reg_slno": "RegSlno",
-    "inv_dp_id": "InvDpId",
-    "inv_client_id": "InvClientId",
-    "dp_inv_name": "DP_InvName",
+    # =====================================================
+    # REGISTRATION
+    # =====================================================
+    "reg_slno": ["RegSlno"],
+    "inv_dp_id": ["InvDpId"],
+    "inv_client_id": ["InvClientId"],
+    "dp_inv_name": ["DP_InvName"],
 
-    # =========================
-    # FLAGS / CONTROL
-    # =========================
-    "modify_flag": "ModifyFlag",
-    "umrncode": "umrncode",
-    "flag": "flag"
+    # =====================================================
+    # CONTROL
+    # =====================================================
+    "modify_flag": ["ModifyFlag"],
+    "umrncode": ["umrncode"]
 }
