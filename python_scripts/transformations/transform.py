@@ -45,6 +45,11 @@ def load_silver():
 
         investor_df = investor_df.drop(columns=["flag"], errors="ignore")
 
+        now = pd.Timestamp.now()
+
+        investor_df["created_at"] = now
+        investor_df["updated_at"] = now
+
         investor_df.to_sql(
             "investor_master",
             engine,
@@ -73,6 +78,11 @@ def load_silver():
 
         transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
 
+        now = pd.Timestamp.now()
+
+        transaction_df["created_at"] = now
+        transaction_df["updated_at"] = now 
+
         transaction_df.to_sql(
             "transaction_master",
             engine,
@@ -100,6 +110,11 @@ def load_silver():
         sip_df = round_decimal_columns(sip_df)
 
         sip_df = sip_df.drop(columns=["flag"], errors="ignore")
+
+        now = pd.Timestamp.now()
+
+        sip_df["created_at"] = now
+        sip_df["updated_at"] = now
 
         sip_df.to_sql(
             "sip_master",
