@@ -54,7 +54,7 @@ def is_valid(df):
 # ==============================
 st.subheader("📂 Upload CAMS / KFintech Excel Files")
 
-col1, col2 = st.columns([10, 2], vertical_alignment="center")
+col1, col2 = st.columns([10, 2], vertical_alignment="top")
 
 with col1:
     uploaded_files = st.file_uploader(
@@ -65,19 +65,17 @@ with col1:
     )
 
 with col2:
-    st.markdown("<br>", unsafe_allow_html=True)
+    # Align the button with the "Upload Files" label
+    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
 
     if st.button("🗑 Clear", use_container_width=True):
 
-        # 🔥 HARD RESET (IMPORTANT FIX)
         st.session_state.uploader_key += 1
         st.session_state.extracted = False
         st.session_state.transformed = False
         st.session_state.current_layer = "bronze"
         st.session_state.bronze_data = {}
         st.session_state.silver_data = {}
-
-        # extra safety reset
         st.session_state.uploaded_types = {}
 
         st.rerun()
