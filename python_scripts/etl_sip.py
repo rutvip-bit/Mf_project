@@ -17,10 +17,8 @@ engine = create_engine(
 
 def clean_columns(df):
 
-    if df is None:
+    if df is None or df.empty:
         return df
-
-    df = df.copy()
 
     df.columns = (
         df.columns.astype(str)
@@ -41,27 +39,26 @@ def clean_columns(df):
 
 def normalize(df):
 
-    if df is None:
+    if df is None or df.empty:
         return df
 
-    df = df.copy()
+    object_cols = df.select_dtypes(include=["object"]).columns
 
-    for col in df.columns:
+    replace_values = {
+        "nan": "",
+        "None": "",
+        "<NA>": "",
+        "NaT": ""
+    }
 
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            continue
+    for col in object_cols:
 
         df[col] = (
             df[col]
             .fillna("")
             .astype(str)
             .str.strip()
-            .replace({
-                "nan": "",
-                "None": "",
-                "<NA>": "",
-                "NaT": ""
-            })
+            .replace(replace_values)
         )
 
     return df
@@ -89,12 +86,24 @@ def apply_sip_mapping(raw_df, mapping):
 
     mapped_df = pd.DataFrame(index=raw_df.index)
 
+    normalized_columns = {}
+
+    for col in raw_df.columns:
+
+        normalized_columns[
+            col.lower()
+            .replace(" ", "_")
+            .replace("-", "_")
+            .replace("/", "_")
+            .replace("#", "")
+        ] = col
+
     for target_col, source_cols in mapping.items():
 
-        if target_col in ["flag", "created_at", "updated_at"]:
+        if target_col in ("flag", "created_at", "updated_at"):
             continue
 
-        value = None
+        mapped_df[target_col] = None
 
         for src in source_cols:
 
@@ -106,14 +115,13 @@ def apply_sip_mapping(raw_df, mapping):
                 .replace("#", "")
             )
 
-            if src in raw_df.columns:
-                value = raw_df[src]
+            if src in normalized_columns:
+
+                mapped_df[target_col] = raw_df[
+                    normalized_columns[src]
+                ]
+
                 break
-
-        if value is None:
-            value = pd.Series([None] * len(raw_df), index=raw_df.index)
-
-        mapped_df[target_col] = value
 
     return mapped_df
 
@@ -123,12 +131,10 @@ def apply_sip_mapping(raw_df, mapping):
 # =====================================================
 
 DATE_COLUMNS = [
-
     "registration_date",
     "start_date",
     "end_date",
     "terminate_date"
-
 ]
 
 
@@ -145,6 +151,57 @@ def format_dates(df):
 
     return df
 
+
+# =====================================================
+# DATABASE COLUMN ORDER
+# =====================================================
+
+DB_COLUMNS = [
+    "Zone",
+    "Branch",
+    "Location",
+    "Ihno",
+    "Folio",
+    "Investor Name",
+    "RegistrationDate",
+    "Start Date",
+    "End Date",
+    "No Of Installments",
+    "Amount",
+    "Scheme",
+    "Plan",
+    "AgentCode",
+    "AgentName",
+    "Subbroker",
+    "Scheme Name",
+    "PAN",
+    "SipType",
+    "SIP Mode",
+    "Fund Code",
+    "Product Code",
+    "Frequency",
+    "Trtype",
+    "To Scheme",
+    "To Plan",
+    "TerminateDate",
+    "Status",
+    "ToProductCode",
+    "ToSchemeName",
+    "ECSNO",
+    "ECSBankName",
+    "ECSAcno",
+    "ECSHolderName",
+    "RegSlno",
+    "InvDpId",
+    "InvClientId",
+    "DP_InvName",
+    "ModifyFlag",
+    "umrncode",
+    "flag",
+    "created_at",
+    "updated_at"
+]
+
 # =====================================================
 # PROCESS SIP MASTER
 # =====================================================
@@ -155,14 +212,12 @@ def process_sip(sip_df):
         print("No SIP file found.")
         return
 
-    raw_df = sip_df.copy()
-
     # =====================================================
     # APPLY MAPPING
     # =====================================================
 
     df = apply_sip_mapping(
-        raw_df,
+        sip_df,
         SIP_MASTER_MAPPING
     )
 
@@ -229,29 +284,29 @@ def process_sip(sip_df):
 
     try:
 
-        existing = pd.read_sql(
+        existing = pd.read_sql_query(
             """
             SELECT umrncode
             FROM bronze.sip_master
+            WHERE umrncode IS NOT NULL
             """,
             engine
         )
 
-        existing = normalize(existing)
+        if not existing.empty:
 
-        existing["umrncode"] = (
-            existing["umrncode"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .str.lower()
-        )
+            existing["umrncode"] = (
+                existing["umrncode"]
+                .astype(str)
+                .str.strip()
+                .str.lower()
+            )
 
     except Exception:
 
         existing = pd.DataFrame(columns=["umrncode"])
 
-        # =====================================================
+    # =====================================================
     # DUPLICATE FLAG
     # =====================================================
 
@@ -261,15 +316,15 @@ def process_sip(sip_df):
 
     else:
 
-        existing_set = set(existing["umrncode"])
+        existing_set = frozenset(existing["umrncode"].values)
 
         df["flag"] = (
             df["umrncode"]
             .isin(existing_set)
-            .astype(int)
+            .astype("int8")
         )
 
-    # =====================================================
+        # =====================================================
     # RENAME TO DATABASE COLUMN NAMES
     # =====================================================
 
@@ -350,48 +405,37 @@ def process_sip(sip_df):
     # DATABASE COLUMN ORDER
     # =====================================================
 
-    db_columns = pd.read_sql(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_schema='bronze'
-        AND table_name='sip_master'
-        ORDER BY ordinal_position
-        """,
-        engine
-    )["column_name"].tolist()
-
-    for col in db_columns:
+    for col in DB_COLUMNS:
 
         if col not in df.columns:
             df[col] = None
 
-    df = df[db_columns]
+    df = df.reindex(columns=DB_COLUMNS)
 
         # =====================================================
     # INSERT INTO BRONZE TABLE
     # =====================================================
 
     df.to_sql(
-
         "sip_master",
         engine,
         schema="bronze",
         if_exists="append",
         index=False,
         method="multi",
-        chunksize=5000
+        chunksize=20000
     )
 
     # =====================================================
     # LOG
     # =====================================================
 
+    inserted_rows = len(df)
+    duplicate_rows = int(df["flag"].sum())
+
     print("=" * 60)
     print("SIP ETL Completed Successfully")
     print("=" * 60)
-    print(f"Inserted Rows : {len(df)}")
-    print(f"Duplicate Rows : {df['flag'].sum()}")
+    print(f"Inserted Rows : {inserted_rows}")
+    print(f"Duplicate Rows : {duplicate_rows}")
     print("=" * 60)
-
-    
