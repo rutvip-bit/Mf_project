@@ -9,7 +9,6 @@ engine = create_engine(
     "postgresql+psycopg2://postgres:postgres123@localhost:5432/tr_project"
 )
 
-
 # =====================================================
 # SAFE READ
 # =====================================================
@@ -17,9 +16,183 @@ engine = create_engine(
 def safe_read(query):
     try:
         return pd.read_sql(query, engine)
-    except Exception:
+    except Exception as e:
+        print(e)
         return pd.DataFrame()
 
+
+# =====================================================
+# NORMALIZE DATA FOR COMPARISON
+# =====================================================
+
+def normalize_for_compare(df):
+
+    df = df.copy()
+
+    # Ignore audit columns
+    df = df.drop(
+        columns=["created_at", "updated_at", "flag"],
+        errors="ignore"
+    )
+
+    for col in df.columns:
+
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+
+            df[col] = (
+                pd.to_datetime(
+                    df[col],
+                    errors="coerce"
+                )
+                .dt.strftime("%Y-%m-%d")
+            )
+
+        else:
+
+            df[col] = (
+                df[col].astype("string").str.strip()
+            )
+
+    return df
+
+
+# =====================================================
+# CREATE UNIQUE ROW KEY
+# =====================================================
+
+def create_row_key(df):
+
+    df = normalize_for_compare(df)
+
+    return df.fillna("").agg("|".join, axis=1)
+
+
+# =====================================================
+# GET SILVER TABLE COLUMNS
+# =====================================================
+
+def get_table_columns(table_name):
+
+    query = f"""
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema='silver'
+    AND table_name='{table_name}'
+    ORDER BY ordinal_position
+    """
+
+    return pd.read_sql(query, engine)["column_name"].tolist()
+
+
+# =====================================================
+# APPEND ONLY NEW RECORDS
+# =====================================================
+
+def append_new_rows(df, table_name):
+
+    if df.empty:
+        print(f"{table_name} : No rows found.")
+        return
+
+    # -----------------------------------------
+    # Read existing silver table
+    # -----------------------------------------
+
+    try:
+
+        existing = pd.read_sql(
+            f"SELECT * FROM silver.{table_name}",
+            engine
+        )
+
+    except Exception:
+
+        existing = pd.DataFrame()
+
+    # -----------------------------------------
+    # First Load
+    # -----------------------------------------
+
+    if existing.empty:
+
+        now = pd.Timestamp.now()
+
+        df["created_at"] = now
+        df["updated_at"] = now
+
+        db_cols = get_table_columns(table_name)
+
+        for col in db_cols:
+
+            if col not in df.columns:
+                df[col] = None
+
+        df = df[db_cols]
+
+        df.to_sql(
+            table_name,
+            engine,
+            schema="silver",
+            if_exists="append",
+            index=False,
+            method="multi",
+            chunksize=5000
+        )
+
+        print(f"{table_name} : Initial Load ({len(df)} rows)")
+        return
+
+    # -----------------------------------------
+    # Compare complete rows
+    # -----------------------------------------
+
+    new_key = create_row_key(df)
+
+    old_key = set(create_row_key(existing))
+
+    df = df.loc[
+        ~new_key.isin(old_key)
+    ].copy()
+
+    # -----------------------------------------
+    # Nothing new
+    # -----------------------------------------
+
+    if df.empty:
+
+        print(f"{table_name} : No New Records")
+
+        return
+
+    # -----------------------------------------
+    # Timestamp only new rows
+    # -----------------------------------------
+
+    now = pd.Timestamp.now()
+
+    df["created_at"] = now
+    df["updated_at"] = now
+
+    db_cols = get_table_columns(table_name)
+
+    for col in db_cols:
+
+        if col not in df.columns:
+            df[col] = None
+
+    df = df[db_cols]
+
+    df.to_sql(
+        table_name,
+        engine,
+        schema="silver",
+        if_exists="append",
+        index=False,
+        method="multi",
+        chunksize=5000
+    )
+
+    print(f"{table_name} : {len(df)} new rows inserted.")
 
 # =====================================================
 # LOAD SILVER
@@ -43,25 +216,18 @@ def load_silver():
 
         investor_df = round_decimal_columns(investor_df)
 
-        investor_df = investor_df.drop(columns=["flag"], errors="ignore")
+        investor_df = investor_df.drop(
+            columns=["flag"],
+            errors="ignore"
+        )
 
-        now = pd.Timestamp.now()
-
-        investor_df["created_at"] = now
-        investor_df["updated_at"] = now
-
-        investor_df.to_sql(
-            "investor_master",
-            engine,
-            schema="silver",
-            if_exists="replace",
-            index=False,
-            chunksize=5000,
-            method="multi"
+        append_new_rows(
+            investor_df,
+            "investor_master"
         )
 
     # =====================================================
-    # TRANSACTION
+    # TRANSACTION MASTER
     # =====================================================
 
     transaction_df = safe_read("""
@@ -76,25 +242,18 @@ def load_silver():
 
         transaction_df = round_decimal_columns(transaction_df)
 
-        transaction_df = transaction_df.drop(columns=["flag"], errors="ignore")
+        transaction_df = transaction_df.drop(
+            columns=["flag"],
+            errors="ignore"
+        )
 
-        now = pd.Timestamp.now()
-
-        transaction_df["created_at"] = now
-        transaction_df["updated_at"] = now 
-
-        transaction_df.to_sql(
-            "transaction_master",
-            engine,
-            schema="silver",
-            if_exists="replace",
-            index=False,
-            chunksize=5000,
-            method="multi"
+        append_new_rows(
+            transaction_df,
+            "transaction_master"
         )
 
     # =====================================================
-    # SIP INFO
+    # SIP MASTER
     # =====================================================
 
     sip_df = safe_read("""
@@ -109,21 +268,14 @@ def load_silver():
 
         sip_df = round_decimal_columns(sip_df)
 
-        sip_df = sip_df.drop(columns=["flag"], errors="ignore")
+        sip_df = sip_df.drop(
+            columns=["flag"],
+            errors="ignore"
+        )
 
-        now = pd.Timestamp.now()
-
-        sip_df["created_at"] = now
-        sip_df["updated_at"] = now
-
-        sip_df.to_sql(
-            "sip_master",
-            engine,
-            schema="silver",
-            if_exists="replace",
-            index=False,
-            chunksize=5000,
-            method="multi"
+        append_new_rows(
+            sip_df,
+            "sip_master"
         )
 
     print("Silver Layer Loaded Successfully")
@@ -145,10 +297,7 @@ def transform_investor_master(df):
 
     for col in object_cols:
         df[col] = (
-            df[col]
-            .fillna("")
-            .astype(str)
-            .str.strip()
+            df[col].astype("string").str.strip()
         )
 
     # =====================================================
@@ -286,16 +435,12 @@ def transform_investor_master(df):
 
     for col in date_cols:
         if col in df.columns:
-            df[col] = pd.to_datetime(
-                df[col],
-                errors="coerce"
-            ).dt.date
-
+            df[col] = pd.to_datetime(df[col], errors="coerce")
     # =====================================================
     # Replace Empty Strings with NULL
     # =====================================================
 
-    df = df.replace("", None)
+    df = df.replace(r"^\s*$", pd.NA, regex=True)
 
     return df
 
@@ -322,10 +467,7 @@ def transform_transaction(df):
 
     for col in object_cols:
         df[col] = (
-            df[col]
-            .fillna("")
-            .astype(str)
-            .str.strip()
+            df[col].astype("string").str.strip()
         )
 
     # =====================================================
@@ -476,7 +618,7 @@ def transform_transaction(df):
     # Replace Empty Strings with NULL
     # =====================================================
 
-    df = df.replace("", None)
+    df = df.replace(r"^\s*$", pd.NA, regex=True)
 
     return df
 
@@ -503,10 +645,7 @@ def transform_sip_master(df):
 
     for col in object_cols:
         df[col] = (
-            df[col]
-            .fillna("")
-            .astype(str)
-            .str.strip()
+            df[col].astype("string").str.strip()
         )
 
     # =====================================================
@@ -690,7 +829,7 @@ def transform_sip_master(df):
     # Replace Empty Strings with NULL
     # =====================================================
 
-    df = df.replace("", None)
+    df = df.replace(r"^\s*$", pd.NA, regex=True)
 
     return df
 

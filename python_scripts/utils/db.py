@@ -33,13 +33,8 @@ def read_table(schema, table, limit=100):
 
         if col in df.columns:
 
-            df[col] = (
-
-                pd.to_datetime(df[col], utc=True)
-
-                  .dt.tz_convert("Asia/Kolkata")
-
-            )
+            df[col] = pd.to_datetime(df[col])
+ 
  
     return df
  
