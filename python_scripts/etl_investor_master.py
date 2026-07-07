@@ -57,6 +57,72 @@ DATE_COLUMNS = [
 
 
 # =====================================================
+# IDENTIFIER COLUMNS
+# (.0 SHOULD NEVER APPEAR)
+# =====================================================
+
+IDENTIFIER_COLUMNS = [
+
+    # Folios
+    "folio_no",
+    "folio",
+    "foliochk",
+    "folio_old",
+    "old_folio",
+    "scheme_folio_number",
+    "scheme_fol",
+
+    # Pincodes
+    "pincode",
+    "pin",
+    "b_pincode",
+    "nominee1_pincode",
+    "nominee2_pincode",
+    "nominee3_pincode",
+    "nom_pincode",
+    "nom2_pincode",
+    "nom3_pincode",
+
+    # Bank
+    "bank_account_no",
+    "account_no",
+    "bnkacno",
+
+    # Phones
+    "mobile_no",
+    "mobile",
+
+    "phone_res",
+    "phone_off",
+
+    "phone_res1",
+    "phone_res2",
+
+    "phone_off1",
+    "phone_off2",
+
+    "rphone",
+    "rphone1",
+    "rphone2",
+
+    "ophone",
+    "ophone1",
+    "ophone2",
+
+    "bank_phone",
+    "bphone",
+
+    "nominee1_phone",
+    "nominee2_phone",
+    "nominee3_phone",
+
+    "nom_ph_off",
+    "nom2_ph_off",
+    "nom3_ph_off"
+]
+
+
+# =====================================================
 # NORMALIZE
 # =====================================================
 
@@ -92,32 +158,34 @@ def normalize(df):
 
 
 # =====================================================
-# CLEAN IDENTIFIER
+# CLEAN IDENTIFIER COLUMNS
 # =====================================================
 
-def clean_identifier(df, column):
+def clean_identifier_columns(df):
 
     if df is None:
         return df
 
-    if column not in df.columns:
-        return df
-
     df = df.copy()
 
-    df[column] = (
-        df[column]
-        .fillna("")
-        .astype(str)
-        .str.strip()
-        .str.replace(r"\.0$", "", regex=True)
-        .replace({
-            "": None,
-            "nan": None,
-            "None": None,
-            "<NA>": None
-        })
-    )
+    for col in IDENTIFIER_COLUMNS:
+
+        if col not in df.columns:
+            continue
+
+        df[col] = (
+            df[col]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.replace(r"\.0$", "", regex=True)
+            .replace({
+                "": None,
+                "nan": None,
+                "None": None,
+                "<NA>": None
+            })
+        )
 
     return df
 
@@ -175,7 +243,6 @@ def format_dates(df):
             )
 
     return df
-
 
 # =====================================================
 # APPLY INVESTOR MAPPING
@@ -239,10 +306,8 @@ def process_investor_master(cams=None, kfin=None):
 
         cams_df = normalize(cams_df)
 
-        cams_df = clean_identifier(
-            cams_df,
-            "folio_no"
-        )
+        # CLEAN ALL IDENTIFIER COLUMNS
+        cams_df = clean_identifier_columns(cams_df)
 
         cams_df = format_dates(cams_df)
 
@@ -261,10 +326,8 @@ def process_investor_master(cams=None, kfin=None):
 
         kfin_df = normalize(kfin_df)
 
-        kfin_df = clean_identifier(
-            kfin_df,
-            "folio_no"
-        )
+        # CLEAN ALL IDENTIFIER COLUMNS
+        kfin_df = clean_identifier_columns(kfin_df)
 
         kfin_df = format_dates(kfin_df)
 
@@ -302,10 +365,8 @@ def process_investor_master(cams=None, kfin=None):
 
         existing = normalize(existing)
 
-        existing = clean_identifier(
-            existing,
-            "folio_no"
-        )
+        # CLEAN ALL IDENTIFIER COLUMNS
+        existing = clean_identifier_columns(existing)
 
         existing = format_dates(existing)
 
@@ -313,10 +374,9 @@ def process_investor_master(cams=None, kfin=None):
 
         existing = pd.DataFrame()
 
-            # =====================================================
-    # DUPLICATE FLAG
     # =====================================================
-
+    # DUPLICATE FLAG
+    # =====================================================   
     ignore_cols = {
         "flag",
         "created_at",
@@ -346,22 +406,12 @@ def process_investor_master(cams=None, kfin=None):
         old_df = existing[compare_cols].copy()
 
         # =====================================================
-        # CLEAN IDENTIFIER BEFORE COMPARISON
+        # CLEAN IDENTIFIER COLUMNS BEFORE COMPARISON
         # =====================================================
 
-        if "folio_no" in new_df.columns:
+        new_df = clean_identifier_columns(new_df)
 
-            new_df = clean_identifier(
-                new_df,
-                "folio_no"
-            )
-
-        if "folio_no" in old_df.columns:
-
-            old_df = clean_identifier(
-                old_df,
-                "folio_no"
-            )
+        old_df = clean_identifier_columns(old_df)
 
         # =====================================================
         # NORMALIZE VALUES
@@ -418,13 +468,10 @@ def process_investor_master(cams=None, kfin=None):
         df["flag"] = new_keys.isin(old_keys).astype(int)
 
     # =====================================================
-    # CLEAN IDENTIFIER AGAIN BEFORE INSERT
+    # CLEAN IDENTIFIER COLUMNS AGAIN BEFORE INSERT
     # =====================================================
 
-    df = clean_identifier(
-        df,
-        "folio_no"
-    )
+    df = clean_identifier_columns(df)
 
     # =====================================================
     # GET COLUMN ORDER FROM POSTGRES
@@ -457,7 +504,7 @@ def process_investor_master(cams=None, kfin=None):
 
     df = df[db_columns]
 
-    # =====================================================
+        # =====================================================
     # FINAL DATE CLEANING
     # =====================================================
 
@@ -478,7 +525,7 @@ def process_investor_master(cams=None, kfin=None):
                 None
             )
 
-        # =====================================================
+    # =====================================================
     # CLEAN NON-DATE COLUMNS
     # =====================================================
 
@@ -498,14 +545,11 @@ def process_investor_master(cams=None, kfin=None):
             )
 
     # =====================================================
-    # FINAL CLEAN IDENTIFIER
+    # FINAL CLEAN IDENTIFIER COLUMNS
     # (ENSURES .0 NEVER REACHES POSTGRES)
     # =====================================================
 
-    df = clean_identifier(
-        df,
-        "folio_no"
-    )
+    df = clean_identifier_columns(df)
 
     # =====================================================
     # DEBUG DATE COLUMNS
@@ -552,13 +596,10 @@ def process_investor_master(cams=None, kfin=None):
             ] = None
 
     # =====================================================
-    # FINAL CLEAN IDENTIFIER
+    # FINAL CLEAN IDENTIFIER COLUMNS
     # =====================================================
 
-    df = clean_identifier(
-        df,
-        "folio_no"
-    )
+    df = clean_identifier_columns(df)
 
     # =====================================================
     # REMOVE EXACT DUPLICATE ROWS
