@@ -513,15 +513,45 @@ def transform_investor_master(df):
         )
 
     # =====================================================
-    # HOLDING NATURE
+    # HOLDING DESCRIPTION
     # =====================================================
 
-    if "holding_nature" in df.columns:
+    holding_mapping = {
+        "SI": "Single",
+        "SINGLE": "Single",
 
-        df["holding_nature"] = (
-            df["holding_nature"]
-            .str.title()
-        )
+        "AS": "Anyone Or Survivor",
+        "ANYONE OR SURVIVOR": "Anyone Or Survivor",
+
+        "JO": "Joint",
+        "JOINT": "Joint",
+
+        "EO": "Either Or Survivor",
+        "EITHER OR SURVIVOR": "Either Or Survivor"
+    }
+
+    holding_cols = [
+        "holding_nature",
+        "mode_of_holding_description"
+    ]
+
+    for col in holding_cols:
+
+        if col in df.columns:
+
+            df[col] = (
+                df[col]
+                .astype("string")
+                .str.strip()
+                .str.upper()
+                .map(holding_mapping)
+                .fillna(
+                    df[col]
+                    .astype("string")
+                    .str.strip()
+                    .str.title()
+                )
+            )
 
     # =====================================================
     # IFSC
