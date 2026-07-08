@@ -295,14 +295,6 @@ def load_silver():
             investor_df,
             "investor_master"
         )
-    
-        with engine.begin() as conn:
-    
-            conn.exec_driver_sql("""
-                UPDATE bronze.investor_master
-                SET flag = 1
-                WHERE flag = 0
-            """)
 
     # =====================================================
     # TRANSACTION MASTER
@@ -330,14 +322,6 @@ def load_silver():
             "transaction_master"
         )
 
-        with engine.begin() as conn:
-
-            conn.exec_driver_sql("""
-                UPDATE bronze.transaction_master
-                SET flag = 1
-                WHERE flag = 0
-            """)
-
     # =====================================================
     # SIP MASTER
     # =====================================================
@@ -363,14 +347,6 @@ def load_silver():
             sip_df,
             "sip_master"
         )
-
-        with engine.begin() as conn:
-
-            conn.exec_driver_sql("""
-                UPDATE bronze.sip_master
-                SET flag = 1
-                WHERE flag = 0
-            """)
 
     print("\nSilver Layer Loaded Successfully")
 
@@ -685,18 +661,29 @@ def transform_transaction(df):
 
     if not state_dim.empty:
 
-        # -------------------------
-        # STATE -> GST STATE CODE
-        # -------------------------
+        # -----------------------------------------
+        # Create Lookups
+        # -----------------------------------------
+
+        state_lookup = dict(
+            zip(
+                state_dim["state_name"].str.upper(),
+                state_dim["state_id"]
+            )
+        )
+
+        code_lookup = dict(
+            zip(
+                state_dim["state_id"],
+                state_dim["state_name"]
+            )
+        )
+
+        # -----------------------------------------
+        # Clean State Column
+        # -----------------------------------------
 
         if "state" in df.columns:
-
-            state_lookup = dict(
-                zip(
-                    state_dim["state"].str.upper(),
-                    state_dim["state_code"]
-                )
-            )
 
             df["state"] = (
                 df["state"]
@@ -705,39 +692,61 @@ def transform_transaction(df):
                 .str.title()
             )
 
-            df["gst_state_code"] = (
-                df["state"]
-                .str.upper()
-                .map(state_lookup)
-            )
-
-        # -------------------------
-        # GST STATE CODE -> STATE
-        # -------------------------
+        # -----------------------------------------
+        # Clean GST State Code
+        # -----------------------------------------
 
         if "gst_state_code" in df.columns:
-
-            code_lookup = dict(
-                zip(
-                    state_dim["state_code"],
-                    state_dim["state"]
-                )
-            )
 
             df["gst_state_code"] = pd.to_numeric(
                 df["gst_state_code"],
                 errors="coerce"
             )
 
-            if "state" not in df.columns:
-                df["state"] = None
+        # -----------------------------------------
+        # STATE -> GST STATE CODE
+        # -----------------------------------------
 
-            df["state"] = (
+        if "state" in df.columns:
+
+            mapped_codes = (
                 df["state"]
-                .fillna(
-                    df["gst_state_code"].map(code_lookup)
-                )
+                .str.upper()
+                .map(state_lookup)
             )
+
+            if "gst_state_code" in df.columns:
+
+                df["gst_state_code"] = (
+                    df["gst_state_code"]
+                    .fillna(mapped_codes)
+                )
+
+            else:
+
+                df["gst_state_code"] = mapped_codes
+
+        # -----------------------------------------
+        # GST STATE CODE -> STATE
+        # -----------------------------------------
+
+        if "gst_state_code" in df.columns:
+
+            mapped_states = (
+                df["gst_state_code"]
+                .map(code_lookup)
+            )
+
+            if "state" in df.columns:
+
+                df["state"] = (
+                    mapped_states
+                    .combine_first(df["state"])
+                )
+
+            else:
+
+                df["state"] = mapped_states
 
     # =====================================================
     # SOURCE SYSTEM
