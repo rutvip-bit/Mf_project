@@ -22,6 +22,37 @@ def safe_read(query):
 
 
 # =====================================================
+# LOAD STATE DIMENSION
+# =====================================================
+
+def load_state_dimension():
+
+    state_dim = safe_read("""
+        SELECT
+            state_id,
+            state_name
+        FROM bronze.state_code
+    """)
+
+    if state_dim.empty:
+        return state_dim
+
+    state_dim["state_id"] = pd.to_numeric(
+        state_dim["state_id"],
+        errors="coerce"
+    )
+
+    state_dim["state_name"] = (
+        state_dim["state_name"]
+        .astype("string")
+        .str.strip()
+        .str.title()
+    )
+
+    return state_dim
+
+
+# =====================================================
 # NORMALIZE DATA FOR COMPARISON
 # =====================================================
 
@@ -29,9 +60,12 @@ def normalize_for_compare(df):
 
     df = df.copy()
 
-    # Ignore audit columns
     df = df.drop(
-        columns=["created_at", "updated_at", "flag"],
+        columns=[
+            "created_at",
+            "updated_at",
+            "flag"
+        ],
         errors="ignore"
     )
 
@@ -50,21 +84,27 @@ def normalize_for_compare(df):
         else:
 
             df[col] = (
-                df[col].astype("string").str.strip()
+                df[col]
+                .astype("string")
+                .str.strip()
             )
 
     return df
 
 
 # =====================================================
-# CREATE UNIQUE ROW KEY
+# CREATE ROW KEY
 # =====================================================
 
 def create_row_key(df):
 
     df = normalize_for_compare(df)
 
-    return df.fillna("").agg("|".join, axis=1)
+    return (
+        df.fillna("")
+        .astype(str)
+        .agg("|".join, axis=1)
+    )
 
 
 # =====================================================
@@ -74,17 +114,19 @@ def create_row_key(df):
 def get_table_columns(table_name):
 
     query = f"""
-    SELECT column_name
-    FROM information_schema.columns
-    WHERE table_schema='silver'
-    AND table_name='{table_name}'
-    ORDER BY ordinal_position
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema='silver'
+        AND table_name='{table_name}'
+        ORDER BY ordinal_position
     """
 
-    return pd.read_sql(query, engine)["column_name"].tolist()
+    return pd.read_sql(
+        query,
+        engine
+    )["column_name"].tolist()
 
-
-# =====================================================
+   # =====================================================
 # APPEND ONLY NEW RECORDS
 # =====================================================
 
@@ -95,7 +137,7 @@ def append_new_rows(df, table_name):
         return
 
     # -----------------------------------------
-    # Read existing silver table
+    # Read Existing Silver Table
     # -----------------------------------------
 
     try:
@@ -143,29 +185,26 @@ def append_new_rows(df, table_name):
         return
 
     # -----------------------------------------
-    # Compare complete rows
+    # Compare Rows
     # -----------------------------------------
 
-    new_key = create_row_key(df)
+    existing_keys = set(
+        create_row_key(existing)
+    )
 
-    old_key = set(create_row_key(existing))
+    new_keys = create_row_key(df)
 
     df = df.loc[
-        ~new_key.isin(old_key)
+        ~new_keys.isin(existing_keys)
     ].copy()
-
-    # -----------------------------------------
-    # Nothing new
-    # -----------------------------------------
 
     if df.empty:
 
         print(f"{table_name} : No New Records")
-
         return
 
     # -----------------------------------------
-    # Timestamp only new rows
+    # Add Audit Columns
     # -----------------------------------------
 
     now = pd.Timestamp.now()
@@ -192,9 +231,9 @@ def append_new_rows(df, table_name):
         chunksize=5000
     )
 
-    print(f"{table_name} : {len(df)} new rows inserted.")
+    print(f"{table_name} : {len(df)} New Rows Inserted")
 
-# =====================================================
+    # =====================================================
 # LOAD SILVER
 # =====================================================
 
@@ -209,22 +248,61 @@ def load_silver():
         FROM bronze.investor_master
         WHERE flag = 0
     """)
-
+    
     if not investor_df.empty:
-
+    
         investor_df = transform_investor_master(investor_df)
-
+    
+        # ===========================
+        # Occupation Name -> Code Mapping
+        # ===========================
+        occupation_mapping = {
+            "SERVICE": 1,
+            "BUSINESS": 2,
+            "PROFESSIONAL": 3,
+            "AGRICULTURE": 4,
+            "STUDENT": 5,
+            "RETIRED": 6,
+            "HOUSEWIFE": 7,
+            "OTHERS": 8,
+            "PRIVATE SECTOR": 9,
+            "PUBLIC SECTOR": 10,
+            "SELF EMPLOYED": 11,
+            "NOT APPLICABLE": 41
+        }
+    
+        investor_df["occupation"] = (
+            investor_df["occupation"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .replace(occupation_mapping)
+        )
+    
+        investor_df["occupation"] = pd.to_numeric(
+            investor_df["occupation"],
+            errors="coerce"
+        ).astype("Int64")
+    
         investor_df = round_decimal_columns(investor_df)
-
+    
         investor_df = investor_df.drop(
             columns=["flag"],
             errors="ignore"
         )
-
+    
         append_new_rows(
             investor_df,
             "investor_master"
         )
+    
+        with engine.begin() as conn:
+    
+            conn.exec_driver_sql("""
+                UPDATE bronze.investor_master
+                SET flag = 1
+                WHERE flag = 0
+            """)
 
     # =====================================================
     # TRANSACTION MASTER
@@ -252,6 +330,14 @@ def load_silver():
             "transaction_master"
         )
 
+        with engine.begin() as conn:
+
+            conn.exec_driver_sql("""
+                UPDATE bronze.transaction_master
+                SET flag = 1
+                WHERE flag = 0
+            """)
+
     # =====================================================
     # SIP MASTER
     # =====================================================
@@ -278,8 +364,15 @@ def load_silver():
             "sip_master"
         )
 
-    print("Silver Layer Loaded Successfully")
+        with engine.begin() as conn:
 
+            conn.exec_driver_sql("""
+                UPDATE bronze.sip_master
+                SET flag = 1
+                WHERE flag = 0
+            """)
+
+    print("\nSilver Layer Loaded Successfully")
 
 # =====================================================
 # INVESTOR MASTER TRANSFORMATION
@@ -289,37 +382,120 @@ def transform_investor_master(df):
 
     df = df.copy()
 
-    # Remove duplicate rows
+    # =====================================================
+    # REMOVE DUPLICATES
+    # =====================================================
+
     df = df.drop_duplicates()
 
-    # Trim all object columns
+    # =====================================================
+    # TRIM STRING COLUMNS
+    # =====================================================
+
     object_cols = df.select_dtypes(include="object").columns
 
     for col in object_cols:
+
         df[col] = (
-            df[col].astype("string").str.strip()
+            df[col]
+            .astype("string")
+            .str.strip()
         )
 
     # =====================================================
-    # Standardize State
+    # LOAD STATE DIMENSION
     # =====================================================
 
-    state_mapping = {
-        "GUJARAT": "Gujarat",
-        "MAHARASHTRA": "Maharashtra",
-        "OTHERS": "Others"
-    }
+    state_dim = load_state_dimension()
 
-    if "state" in df.columns:
-        df["state"] = (
-            df["state"]
-            .str.upper()
-            .map(state_mapping)
-            .fillna(df["state"].str.title())
+    if not state_dim.empty:
+
+        # -----------------------------------------
+        # Prepare Dimension Table
+        # -----------------------------------------
+
+        state_dim["state_id"] = pd.to_numeric(
+            state_dim["state_id"],
+            errors="coerce"
         )
 
+        state_dim["state_name"] = (
+            state_dim["state_name"]
+            .astype("string")
+            .str.strip()
+            .str.title()
+        )
+
+        state_lookup = dict(
+            zip(
+                state_dim["state_name"].str.upper(),
+                state_dim["state_id"]
+            )
+        )
+
+        code_lookup = dict(
+            zip(
+                state_dim["state_id"],
+                state_dim["state_name"]
+            )
+        )
+
+        # -----------------------------------------
+        # Clean DataFrame Columns
+        # -----------------------------------------
+
+        if "state" in df.columns:
+
+            df["state"] = (
+                df["state"]
+                .astype("string")
+                .str.strip()
+                .replace(r"^\s*$", pd.NA, regex=True)
+                .str.title()
+            )
+
+        if "gst_state_code" in df.columns:
+
+            df["gst_state_code"] = pd.to_numeric(
+                df["gst_state_code"],
+                errors="coerce"
+            )
+
+        # -----------------------------------------
+        # STATE -> GST STATE CODE
+        # -----------------------------------------
+
+        if "state" in df.columns:
+
+            mapped_code = (
+                df["state"]
+                .str.upper()
+                .map(state_lookup)
+            )
+
+            if "gst_state_code" in df.columns:
+                df["gst_state_code"] = df["gst_state_code"].fillna(mapped_code)
+            else:
+                df["gst_state_code"] = mapped_code
+
+        # -----------------------------------------
+        # GST STATE CODE -> STATE
+        # -----------------------------------------
+
+        if "gst_state_code" in df.columns:
+
+            mapped_state = (
+                df["gst_state_code"]
+                .map(code_lookup)
+            )
+
+            if "state" in df.columns:
+                df["state"] = mapped_state.combine_first(df["state"])
+            else:
+                df["state"] = mapped_state
+
     # =====================================================
-    # Standardize Account Type
+    # ACCOUNT TYPE
     # =====================================================
 
     account_mapping = {
@@ -332,6 +508,7 @@ def transform_investor_master(df):
     }
 
     if "account_type" in df.columns:
+
         df["account_type"] = (
             df["account_type"]
             .str.upper()
@@ -340,7 +517,7 @@ def transform_investor_master(df):
         )
 
     # =====================================================
-    # Standardize Tax Status
+    # TAX STATUS
     # =====================================================
 
     tax_mapping = {
@@ -351,6 +528,7 @@ def transform_investor_master(df):
     }
 
     if "tax_status" in df.columns:
+
         df["tax_status"] = (
             df["tax_status"]
             .str.upper()
@@ -358,25 +536,30 @@ def transform_investor_master(df):
             .fillna(df["tax_status"])
         )
 
-        # =====================================================
-    # Standardize Holding Nature
+    # =====================================================
+    # HOLDING NATURE
     # =====================================================
 
     if "holding_nature" in df.columns:
+
         df["holding_nature"] = (
             df["holding_nature"]
             .str.title()
         )
 
     # =====================================================
-    # Standardize IFSC
+    # IFSC
     # =====================================================
 
     if "ifsc_code" in df.columns:
-        df["ifsc_code"] = df["ifsc_code"].str.upper()
+
+        df["ifsc_code"] = (
+            df["ifsc_code"]
+            .str.upper()
+        )
 
     # =====================================================
-    # Standardize PAN
+    # PAN
     # =====================================================
 
     pan_cols = [
@@ -387,11 +570,16 @@ def transform_investor_master(df):
     ]
 
     for col in pan_cols:
+
         if col in df.columns:
-            df[col] = df[col].str.upper()
+
+            df[col] = (
+                df[col]
+                .str.upper()
+            )
 
     # =====================================================
-    # Lowercase Email
+    # EMAIL
     # =====================================================
 
     email_cols = [
@@ -402,21 +590,28 @@ def transform_investor_master(df):
     ]
 
     for col in email_cols:
+
         if col in df.columns:
-            df[col] = df[col].str.lower()
+
+            df[col] = (
+                df[col]
+                .str.lower()
+            )
 
     # =====================================================
-    # Remove Spaces from Phone Numbers
+    # PHONE
     # =====================================================
 
-    mobile_cols = [
+    phone_cols = [
         "mobile_no",
         "phone_res",
         "phone_off"
     ]
 
-    for col in mobile_cols:
+    for col in phone_cols:
+
         if col in df.columns:
+
             df[col] = (
                 df[col]
                 .str.replace(" ", "", regex=False)
@@ -424,7 +619,7 @@ def transform_investor_master(df):
             )
 
     # =====================================================
-    # Date Formatting
+    # DATE COLUMNS
     # =====================================================
 
     date_cols = [
@@ -434,16 +629,25 @@ def transform_investor_master(df):
     ]
 
     for col in date_cols:
+
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
+
+            df[col] = pd.to_datetime(
+                df[col],
+                errors="coerce"
+            )
+
     # =====================================================
-    # Replace Empty Strings with NULL
+    # EMPTY TO NULL
     # =====================================================
 
-    df = df.replace(r"^\s*$", pd.NA, regex=True)
+    df = df.replace(
+        r"^\s*$",
+        pd.NA,
+        regex=True
+    )
 
-    return df
-
+    return df 
 
 # =====================================================
 # TRANSACTION TRANSFORMATION
@@ -454,38 +658,111 @@ def transform_transaction(df):
     df = df.copy()
 
     # =====================================================
-    # Remove Duplicates
+    # REMOVE DUPLICATES
     # =====================================================
 
     df = df.drop_duplicates()
 
     # =====================================================
-    # Trim Spaces
+    # TRIM STRING COLUMNS
     # =====================================================
 
     object_cols = df.select_dtypes(include="object").columns
 
     for col in object_cols:
+
         df[col] = (
-            df[col].astype("string").str.strip()
+            df[col]
+            .astype("string")
+            .str.strip()
         )
 
     # =====================================================
-    # Source System
+    # LOAD STATE DIMENSION
+    # =====================================================
+
+    state_dim = load_state_dimension()
+
+    if not state_dim.empty:
+
+        # -------------------------
+        # STATE -> GST STATE CODE
+        # -------------------------
+
+        if "state" in df.columns:
+
+            state_lookup = dict(
+                zip(
+                    state_dim["state"].str.upper(),
+                    state_dim["state_code"]
+                )
+            )
+
+            df["state"] = (
+                df["state"]
+                .astype("string")
+                .str.strip()
+                .str.title()
+            )
+
+            df["gst_state_code"] = (
+                df["state"]
+                .str.upper()
+                .map(state_lookup)
+            )
+
+        # -------------------------
+        # GST STATE CODE -> STATE
+        # -------------------------
+
+        if "gst_state_code" in df.columns:
+
+            code_lookup = dict(
+                zip(
+                    state_dim["state_code"],
+                    state_dim["state"]
+                )
+            )
+
+            df["gst_state_code"] = pd.to_numeric(
+                df["gst_state_code"],
+                errors="coerce"
+            )
+
+            if "state" not in df.columns:
+                df["state"] = None
+
+            df["state"] = (
+                df["state"]
+                .fillna(
+                    df["gst_state_code"].map(code_lookup)
+                )
+            )
+
+    # =====================================================
+    # SOURCE SYSTEM
     # =====================================================
 
     if "source_system" in df.columns:
-        df["source_system"] = df["source_system"].str.upper()
+
+        df["source_system"] = (
+            df["source_system"]
+            .str.upper()
+        )
 
     # =====================================================
-    # Location
+    # LOCATION
     # =====================================================
 
     if "location" in df.columns:
-        df["location"] = df["location"].str.title()
+
+        df["location"] = (
+            df["location"]
+            .str.title()
+        )
 
     # =====================================================
-    # Bank Name Mapping
+    # BANK NAME
     # =====================================================
 
     bank_mapping = {
@@ -493,20 +770,21 @@ def transform_transaction(df):
         "HDFC BANK": "HDFC Bank",
         "HDFC BANK LTD": "HDFC Bank",
         "HDFC BANK LIMITED": "HDFC Bank",
-        "STATE BANK OF INDIA": "State Bank of India",
-        "SBI": "State Bank of India",
-        "KOTAK MAHINDRA BANK LIMITED": "Kotak Mahindra Bank",
-        "KOTAK BANK": "Kotak Mahindra Bank",
+        "STATE BANK OF INDIA": "State Bank Of India",
+        "SBI": "State Bank Of India",
+        "ICICI BANK": "ICICI Bank",
+        "ICICI BANK LIMITED": "ICICI Bank",
         "AXIS BANK": "Axis Bank",
         "AXIS BANK LTD": "Axis Bank",
-        "BANK OF INDIA": "Bank of India",
-        "BANKOFBARODA": "Bank of Baroda",
-        "BANK OF BARODA": "Bank of Baroda",
-        "ICICI BANK": "ICICI Bank",
-        "ICICI BANK LIMITED": "ICICI Bank"
+        "BANK OF BARODA": "Bank Of Baroda",
+        "BANKOFBARODA": "Bank Of Baroda",
+        "BANK OF INDIA": "Bank Of India",
+        "KOTAK BANK": "Kotak Mahindra Bank",
+        "KOTAK MAHINDRA BANK LIMITED": "Kotak Mahindra Bank"
     }
 
     if "bank_name" in df.columns:
+
         df["bank_name"] = (
             df["bank_name"]
             .str.upper()
@@ -514,8 +792,8 @@ def transform_transaction(df):
             .fillna(df["bank_name"].str.title())
         )
 
-        # =====================================================
-    # Standardize Tax Status
+    # =====================================================
+    # TAX STATUS
     # =====================================================
 
     tax_mapping = {
@@ -527,6 +805,7 @@ def transform_transaction(df):
     }
 
     if "tax_status" in df.columns:
+
         df["tax_status"] = (
             df["tax_status"]
             .str.upper()
@@ -535,28 +814,29 @@ def transform_transaction(df):
         )
 
     # =====================================================
-    # Broker Code
-    # =====================================================
-
-    if "broker_code" in df.columns:
-        df["broker_code"] = df["broker_code"].str.upper()
-
-    # =====================================================
     # PAN
     # =====================================================
 
     if "pan" in df.columns:
-        df["pan"] = df["pan"].str.upper()
+
+        df["pan"] = (
+            df["pan"]
+            .str.upper()
+        )
 
     # =====================================================
-    # Email
+    # EMAIL
     # =====================================================
 
     if "email" in df.columns:
-        df["email"] = df["email"].str.lower()
+
+        df["email"] = (
+            df["email"]
+            .str.lower()
+        )
 
     # =====================================================
-    # Phone Numbers
+    # PHONE
     # =====================================================
 
     phone_cols = [
@@ -566,7 +846,9 @@ def transform_transaction(df):
     ]
 
     for col in phone_cols:
+
         if col in df.columns:
+
             df[col] = (
                 df[col]
                 .str.replace(" ", "", regex=False)
@@ -574,7 +856,7 @@ def transform_transaction(df):
             )
 
     # =====================================================
-    # Date Columns
+    # DATE COLUMNS
     # =====================================================
 
     date_cols = [
@@ -587,14 +869,16 @@ def transform_transaction(df):
     ]
 
     for col in date_cols:
+
         if col in df.columns:
+
             df[col] = pd.to_datetime(
                 df[col],
                 errors="coerce"
             ).dt.date
 
     # =====================================================
-    # Numeric Columns
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -608,20 +892,25 @@ def transform_transaction(df):
     ]
 
     for col in numeric_cols:
+
         if col in df.columns:
+
             df[col] = pd.to_numeric(
                 df[col],
                 errors="coerce"
             )
 
     # =====================================================
-    # Replace Empty Strings with NULL
+    # EMPTY TO NULL
     # =====================================================
 
-    df = df.replace(r"^\s*$", pd.NA, regex=True)
+    df = df.replace(
+        r"^\s*$",
+        pd.NA,
+        regex=True
+    )
 
     return df
-
 
 # =====================================================
 # SIP MASTER TRANSFORMATION
@@ -632,24 +921,27 @@ def transform_sip_master(df):
     df = df.copy()
 
     # =====================================================
-    # Remove Duplicate Records
+    # REMOVE DUPLICATES
     # =====================================================
 
     df = df.drop_duplicates()
 
     # =====================================================
-    # Trim String Columns
+    # TRIM STRING COLUMNS
     # =====================================================
 
     object_cols = df.select_dtypes(include="object").columns
 
     for col in object_cols:
+
         df[col] = (
-            df[col].astype("string").str.strip()
+            df[col]
+            .astype("string")
+            .str.strip()
         )
 
     # =====================================================
-    # Standardize Text Columns
+    # TITLE CASE COLUMNS
     # =====================================================
 
     title_cols = [
@@ -665,18 +957,27 @@ def transform_sip_master(df):
     ]
 
     for col in title_cols:
+
         if col in df.columns:
-            df[col] = df[col].str.title()
+
+            df[col] = (
+                df[col]
+                .str.title()
+            )
 
     # =====================================================
     # PAN
     # =====================================================
 
     if "pan" in df.columns:
-        df["pan"] = df["pan"].str.upper()
+
+        df["pan"] = (
+            df["pan"]
+            .str.upper()
+        )
 
     # =====================================================
-    # Uppercase Codes
+    # UPPER CASE COLUMNS
     # =====================================================
 
     upper_cols = [
@@ -696,11 +997,16 @@ def transform_sip_master(df):
     ]
 
     for col in upper_cols:
-        if col in df.columns:
-            df[col] = df[col].str.upper()
 
-            # =====================================================
-    # Standardize Plan
+        if col in df.columns:
+
+            df[col] = (
+                df[col]
+                .str.upper()
+            )
+
+    # =====================================================
+    # PLAN
     # =====================================================
 
     plan_mapping = {
@@ -709,7 +1015,9 @@ def transform_sip_master(df):
     }
 
     for col in ["plan", "to_plan"]:
+
         if col in df.columns:
+
             df[col] = (
                 df[col]
                 .str.upper()
@@ -718,14 +1026,18 @@ def transform_sip_master(df):
             )
 
     # =====================================================
-    # Standardize SIP Type
+    # SIP TYPE
     # =====================================================
 
     if "sip_type" in df.columns:
-        df["sip_type"] = df["sip_type"].str.title()
+
+        df["sip_type"] = (
+            df["sip_type"]
+            .str.title()
+        )
 
     # =====================================================
-    # Standardize SIP Mode
+    # SIP MODE
     # =====================================================
 
     sip_mode_mapping = {
@@ -736,6 +1048,7 @@ def transform_sip_master(df):
     }
 
     if "sip_mode" in df.columns:
+
         df["sip_mode"] = (
             df["sip_mode"]
             .str.upper()
@@ -744,28 +1057,40 @@ def transform_sip_master(df):
         )
 
     # =====================================================
-    # Standardize Frequency
+    # FREQUENCY
     # =====================================================
 
     if "frequency" in df.columns:
-        df["frequency"] = df["frequency"].str.title()
+
+        df["frequency"] = (
+            df["frequency"]
+            .str.title()
+        )
 
     # =====================================================
-    # Standardize Transaction Type
+    # TRANSACTION TYPE
     # =====================================================
 
     if "trtype" in df.columns:
-        df["trtype"] = df["trtype"].str.title()
+
+        df["trtype"] = (
+            df["trtype"]
+            .str.title()
+        )
 
     # =====================================================
-    # Standardize Status
+    # STATUS
     # =====================================================
 
     if "status" in df.columns:
-        df["status"] = df["status"].str.title()
+
+        df["status"] = (
+            df["status"]
+            .str.title()
+        )
 
     # =====================================================
-    # Standardize Modify Flag
+    # MODIFY FLAG
     # =====================================================
 
     modify_mapping = {
@@ -774,6 +1099,7 @@ def transform_sip_master(df):
     }
 
     if "modify_flag" in df.columns:
+
         df["modify_flag"] = (
             df["modify_flag"]
             .str.upper()
@@ -782,17 +1108,18 @@ def transform_sip_master(df):
         )
 
     # =====================================================
-    # Remove Spaces from ECS Account Number
+    # REMOVE SPACES FROM ACCOUNT NUMBER
     # =====================================================
 
     if "ecs_acno" in df.columns:
+
         df["ecs_acno"] = (
             df["ecs_acno"]
             .str.replace(" ", "", regex=False)
         )
 
     # =====================================================
-    # Date Formatting
+    # DATE COLUMNS
     # =====================================================
 
     date_cols = [
@@ -803,14 +1130,16 @@ def transform_sip_master(df):
     ]
 
     for col in date_cols:
+
         if col in df.columns:
+
             df[col] = pd.to_datetime(
                 df[col],
                 errors="coerce"
             ).dt.date
 
     # =====================================================
-    # Numeric Formatting
+    # NUMERIC COLUMNS
     # =====================================================
 
     numeric_cols = [
@@ -819,39 +1148,40 @@ def transform_sip_master(df):
     ]
 
     for col in numeric_cols:
+
         if col in df.columns:
+
             df[col] = pd.to_numeric(
                 df[col],
                 errors="coerce"
             )
 
     # =====================================================
-    # Replace Empty Strings with NULL
+    # EMPTY TO NULL
     # =====================================================
 
-    df = df.replace(r"^\s*$", pd.NA, regex=True)
+    df = df.replace(
+        r"^\s*$",
+        pd.NA,
+        regex=True
+    )
 
     return df
-
 
 # =====================================================
 # ROUND DECIMAL COLUMNS
 # =====================================================
 
 def round_decimal_columns(df):
-    """
-    Round all float columns to 2 decimal places.
-    Integer columns remain unchanged.
-    """
 
     df = df.copy()
 
     float_cols = df.select_dtypes(
-        include=["float64", "float32"]
+        include=["float16", "float32", "float64"]
     ).columns
 
     for col in float_cols:
+
         df[col] = df[col].round(2)
 
     return df
-
