@@ -28,8 +28,10 @@ def clean_columns(df):
 
     df.columns = (
         df.columns.astype(str)
-        .str.lower()
         .str.strip()
+        .str.strip("'")
+        .str.strip('"')
+        .str.lower()
         .str.replace(" ", "_", regex=False)
         .str.replace("-", "_", regex=False)
         .str.replace("/", "_", regex=False)
@@ -251,6 +253,10 @@ def format_dates(df):
 def apply_investor_mapping(raw_df, mapping):
 
     raw_df = clean_columns(raw_df)
+    print("=" * 80)
+    print(raw_df.columns.tolist())
+    print(raw_df.head())
+    print("=" * 80)
 
     mapped_df = pd.DataFrame(index=raw_df.index)
 

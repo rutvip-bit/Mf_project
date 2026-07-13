@@ -71,9 +71,20 @@ def read_file(file):
             keep_default_na=False
         )
 
-    # =================================================
-    # CLEAN DATA
-    # =================================================
+    # =====================================================
+    # CLEAN COLUMN NAMES
+    # =====================================================
+
+    df.columns = (
+        df.columns.astype(str)
+        .str.strip()
+        .str.strip("'")
+        .str.strip('"')
+    )
+
+    # =====================================================
+    # CLEAN VALUES
+    # =====================================================
 
     object_cols = df.select_dtypes(include="object").columns
 
@@ -81,12 +92,18 @@ def read_file(file):
 
         df[object_cols] = (
             df[object_cols]
-            .replace({"'": ""}, regex=True)
-            .replace(r"^\s+$", "", regex=True)
-        )
-
-        df[object_cols] = df[object_cols].apply(
-            lambda x: x.str.strip()
+            .astype(str)
+            .replace(
+                {
+                    r"^'": "",
+                    r"'$": "",
+                    "nan": "",
+                    "None": "",
+                    "<NA>": ""
+                },
+                regex=True
+            )
+            .apply(lambda s: s.str.strip())
         )
 
     return df
@@ -134,7 +151,12 @@ def extract_and_push(uploaded_files):
 
     if investor_files:
 
-        process_investor_master(investor_files)
+        investor_df = pd.concat(
+            investor_files,
+            ignore_index=True
+        )
+
+        process_investor_master(cams=investor_df)
 
     # =================================================
     # PROCESS SIP
