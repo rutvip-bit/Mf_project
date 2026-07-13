@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+from pyparsing import col
 from sqlalchemy import create_engine
 
 from mapping import INVESTOR_MASTER_MAPPING
@@ -147,6 +148,8 @@ def normalize(df):
             df[col]
             .fillna("")
             .astype(str)
+            .str.replace("'", "", regex=False)
+            .str.replace('"', "", regex=False)
             .str.strip()
             .replace({
                 "nan": "",
@@ -155,7 +158,7 @@ def normalize(df):
                 "NaT": ""
             })
         )
-
+        
     return df
 
 

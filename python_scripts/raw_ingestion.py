@@ -93,17 +93,16 @@ def read_file(file):
         df[object_cols] = (
             df[object_cols]
             .astype(str)
-            .replace(
-                {
-                    r"^'": "",
-                    r"'$": "",
-                    "nan": "",
-                    "None": "",
-                    "<NA>": ""
-                },
-                regex=True
+            .apply(
+                lambda s: s.str.replace("'", "", regex=False)
+                        .str.replace('"', "", regex=False)
+                        .str.strip()
             )
-            .apply(lambda s: s.str.strip())
+            .replace({
+                "nan": "",
+                "None": "",
+                "<NA>": ""
+            })
         )
 
     return df
