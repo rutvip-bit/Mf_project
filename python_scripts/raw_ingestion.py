@@ -1,10 +1,10 @@
 import csv
+import io
 import pandas as pd
 
 from etl_investor_master import process_investor_master
 from etl_trans import process_transactions
 from etl_sip import process_sip
-
 
 # =====================================================
 # READ FILE
@@ -34,29 +34,70 @@ def read_file(file):
             delimiter = ","
 
         try:
-            df = pd.read_csv(
-                file,
-                sep=delimiter,
-                dtype=str,
-                keep_default_na=False,
-                low_memory=False
-            )
+
+            file.seek(0)
+
+            text = file.read().decode("utf-8")
 
         except UnicodeDecodeError:
 
             file.seek(0)
-            sample = file.read(500).decode("utf-8", errors="ignore")
-            print(sample[:500])
-            file.seek(0)
 
-            df = pd.read_csv(
-                file,
-                sep=delimiter,
-                encoding="latin1",
-                dtype=str,
-                keep_default_na=False,
-                low_memory=False
-            )
+            text = file.read().decode("latin1")
+
+        # =====================================================
+        # PARSE CSV USING SINGLE QUOTES
+        # =====================================================
+
+        reader = csv.reader(
+            io.StringIO(text),
+            delimiter=delimiter,
+            quotechar="'",
+            skipinitialspace=True
+        )
+
+        rows = list(reader)
+
+        header = rows[0]
+        expected_cols = len(header)
+
+        clean_rows = []
+
+        print("=" * 80)
+        print("Header Columns :", expected_cols)
+
+        bad_rows = 0
+
+        for i, row in enumerate(rows[1:], start=2):
+
+            if len(row) != expected_cols:
+
+                bad_rows += 1
+
+                print(f"\nProblem found at row {i}")
+                print(f"Expected Columns : {expected_cols}")
+                print(f"Found Columns    : {len(row)}")
+
+                # Print only first few values to avoid flooding terminal
+                print(row[:10])
+
+            # Extra columns -> keep only expected columns
+            if len(row) > expected_cols:
+                row = row[:expected_cols]
+
+            # Missing columns -> pad with blanks
+            elif len(row) < expected_cols:
+                row = row + [""] * (expected_cols - len(row))
+
+            clean_rows.append(row)
+
+        print("Total Bad Rows :", bad_rows)
+        print("=" * 80)
+
+        df = pd.DataFrame(
+            clean_rows,
+            columns=header
+        )
 
     # =================================================
     # EXCEL
@@ -104,6 +145,22 @@ def read_file(file):
                 "<NA>": ""
             })
         )
+
+    # =====================================================
+    # DEBUG
+    # =====================================================
+
+    print("\n" + "=" * 80)
+    print("FILE :", file.name)
+    print("ROWS READ :", len(df))
+    print("TOTAL COLUMNS :", len(df.columns))
+    print("COLUMN NAMES :")
+    print(df.columns.tolist())
+
+    print("\nSample Rows (1340-1355):")
+    print(df.iloc[1340:1355])
+
+    print("=" * 80 + "\n")
 
     return df
 

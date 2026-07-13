@@ -256,7 +256,10 @@ def format_dates(df):
 def apply_investor_mapping(raw_df, mapping):
 
     raw_df = clean_columns(raw_df)
+
     print("=" * 80)
+    print("Rows received for mapping :", len(raw_df))
+    print("Columns :", len(raw_df.columns))
     print(raw_df.columns.tolist())
     print(raw_df.head())
     print("=" * 80)

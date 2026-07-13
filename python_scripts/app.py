@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import traceback
+
+from raw_ingestion import extract_and_push
 from transformations.transform import load_silver
 from utils.db import read_table
 
@@ -13,6 +15,7 @@ st.set_page_config(
 # ==============================
 # HEADER
 # ==============================
+
 st.markdown(
     "<h1 style='text-align:center;'>📊 Mutual Funds Dashboard</h1>",
     unsafe_allow_html=True
@@ -23,6 +26,7 @@ st.divider()
 # ==============================
 # SESSION STATE
 # ==============================
+
 if "uploader_key" not in st.session_state:
     st.session_state.uploader_key = 0
 
@@ -41,127 +45,90 @@ if "silver_data" not in st.session_state:
 if "current_layer" not in st.session_state:
     st.session_state.current_layer = "bronze"
 
+if "uploaded_types" not in st.session_state:
+    st.session_state.uploaded_types = {
+        "investor": False,
+        "transaction": False,
+        "sip": False
+    }
+
 
 # ==============================
 # HELPERS
 # ==============================
+
 def is_valid(df):
-    return df is not None and isinstance(df, pd.DataFrame) and not df.empty
+    return (
+        df is not None
+        and isinstance(df, pd.DataFrame)
+        and not df.empty
+    )
 
 
 # ==============================
 # FILE UPLOAD UI
 # ==============================
+
 st.subheader("📂 Upload CAMS / KFintech Excel Files")
 
 col1, col2 = st.columns([10, 2], vertical_alignment="top")
 
 with col1:
+
     uploaded_files = st.file_uploader(
         "Upload Files",
-        type=["xlsx", "csv"],
+        type=["xlsx", "csv", "txt"],
         accept_multiple_files=True,
         key=f"uploader_{st.session_state.uploader_key}"
     )
 
 with col2:
-    # Align the button with the "Upload Files" label
-    st.markdown("<div style='height: 32px;'></div>", unsafe_allow_html=True)
 
-    if st.button("🗑 Clear", use_container_width=True):
+    st.markdown(
+        "<div style='height:32px;'></div>",
+        unsafe_allow_html=True
+    )
+
+    if st.button(
+        "🗑 Clear",
+        width="stretch"
+    ):
 
         st.session_state.uploader_key += 1
+
         st.session_state.extracted = False
         st.session_state.transformed = False
+
         st.session_state.current_layer = "bronze"
+
         st.session_state.bronze_data = {}
         st.session_state.silver_data = {}
-        st.session_state.uploaded_types = {}
+
+        st.session_state.uploaded_types = {
+            "investor": False,
+            "transaction": False,
+            "sip": False
+        }
 
         st.rerun()
 
 st.divider()
 
-
-# ==============================
-# FILE LOADER
-# ==============================
-def read_uploaded_file(file):
-    """
-    Read Excel or CSV file and return a DataFrame.
-    """
-
-    filename = file.name.lower()
-
-    if filename.endswith(".csv"):
-
-        encodings = ["utf-8", "utf-8-sig", "latin1", "cp1252"]
-
-        for enc in encodings:
-            try:
-                file.seek(0)
-
-                return pd.read_csv(
-                    file,
-                    encoding=enc,
-                    engine="python",
-                    on_bad_lines="skip"
-                )
-
-            except Exception:
-                continue
-
-        raise Exception(f"Unable to read CSV file: {file.name}")
-
-    elif filename.endswith(".xlsx"):
-        file.seek(0)
-        return pd.read_excel(file)
-
-    return None
-
-
-def load_files(files):
-
-    cams_inv = None
-    cams_trans = None
-    kfin_inv = None
-    kfin_trans = None
-    sip_df = None
-
-    for file in files:
-
-        name = file.name.lower()
-
-        df = read_uploaded_file(file)
-
-        if df is None:
-            continue
-
-        if "cams" in name and "inv" in name:
-            cams_inv = df
-
-        elif "cams" in name and "trans" in name:
-            cams_trans = df
-
-        elif "kfin" in name and "investor" in name:
-            kfin_inv = df
-
-        elif "kfin" in name and "trans" in name:
-            kfin_trans = df
-
-        elif "sip" in name:
-            sip_df = df
-
-    return cams_inv, cams_trans, kfin_inv, kfin_trans, sip_df
-
-
 # ==============================
 # BUTTONS
 # ==============================
+
 col1, col2 = st.columns(2)
 
-extract_btn = col1.button("🟢 Extract Raw Data", use_container_width=True)
-transform_btn = col2.button("🟡 Transform Data", use_container_width=True)
+extract_btn = col1.button(
+    "🟢 Extract Raw Data",
+    use_container_width=True
+)
+
+transform_btn = col2.button(
+    "🟡 Transform Data",
+    use_container_width=True
+)
 
 st.divider()
 
@@ -169,6 +136,7 @@ st.divider()
 # ==============================
 # EXTRACT LOGIC
 # ==============================
+
 if extract_btn:
 
     st.session_state.transformed = False
@@ -178,67 +146,66 @@ if extract_btn:
     try:
 
         if not uploaded_files:
-            st.warning("⚠ Please upload files first.")
+
+            st.warning("⚠ Please upload one or more files.")
             st.stop()
 
-        st.info("Reading files...")
+        st.info("Reading uploaded files...")
 
-        cams_inv, cams_trans, kfin_inv, kfin_trans, sip_df = load_files(uploaded_files)
-
-        uploaded = sum([
-            is_valid(cams_inv),
-            is_valid(cams_trans),
-            is_valid(kfin_inv),
-            is_valid(kfin_trans),
-            is_valid(sip_df)
-        ])
-
-        st.success(f"✔ {uploaded} dataset(s) detected")
-
-        # ==============================
-        # ETL CALLS
-        # ==============================
-        from etl_investor_master import process_investor_master
-        from etl_trans import process_transactions
-        from etl_sip import process_sip
-
-        investor_df = cams_inv if is_valid(cams_inv) else kfin_inv
-        transaction_df = cams_trans if is_valid(cams_trans) else kfin_trans
-
-        st.session_state.uploaded_types = {
-            "investor": is_valid(investor_df),
-            "transaction": is_valid(transaction_df),
-            "sip": is_valid(sip_df)
+        # Detect uploaded file types
+        uploaded_types = {
+            "investor": False,
+            "transaction": False,
+            "sip": False
         }
 
-        # INVESTOR
-        if is_valid(cams_inv) or is_valid(kfin_inv):
-             process_investor_master(
-        cams=cams_inv,
-        kfin=kfin_inv
-    )
+        for file in uploaded_files:
 
-        # TRANSACTIONS
-        if is_valid(cams_trans) or is_valid(kfin_trans):
-            process_transactions(cams=cams_trans, kfin=kfin_trans)
+            name = file.name.lower()
 
-        # SIP (FIXED CALL)
-        if is_valid(sip_df):
-            process_sip(sip_df)
+            if "inv" in name:
+                uploaded_types["investor"] = True
 
-        # ==============================
-        # LOAD BRONZE PREVIEW
-        # ==============================
+            elif "trans" in name:
+                uploaded_types["transaction"] = True
+
+            elif "sip" in name:
+                uploaded_types["sip"] = True
+
+        st.session_state.uploaded_types = uploaded_types
+
+        # Run Raw Ingestion
+        transaction_count, investor_count, sip_count = extract_and_push(
+            uploaded_files
+        )
+
+        st.success(
+            f"✔ Extraction Complete "
+            f"(Transactions: {transaction_count}, "
+            f"Investor: {investor_count}, "
+            f"SIP: {sip_count})"
+        )
+
+        # Bronze Preview
         bronze_data = {}
 
-        if st.session_state.uploaded_types["investor"]:
-            bronze_data["Investor Master"] = read_table("bronze", "investor_master")
+        if uploaded_types["investor"]:
+            bronze_data["Investor Master"] = read_table(
+                "bronze",
+                "investor_master"
+            )
 
-        if st.session_state.uploaded_types["transaction"]:
-            bronze_data["Transactions"] = read_table("bronze", "transaction_master")
+        if uploaded_types["transaction"]:
+            bronze_data["Transactions"] = read_table(
+                "bronze",
+                "transaction_master"
+            )
 
-        if st.session_state.uploaded_types["sip"]:
-            bronze_data["SIP"] = read_table("bronze", "sip_master")
+        if uploaded_types["sip"]:
+            bronze_data["SIP"] = read_table(
+                "bronze",
+                "sip_master"
+            )
 
         st.session_state.bronze_data = bronze_data
         st.session_state.extracted = True
@@ -247,19 +214,22 @@ if extract_btn:
         st.success("✔ Extraction Completed + DB Load Done")
 
     except Exception:
+
         st.error("Extraction Failed")
         st.code(traceback.format_exc())
-
 
 # ==============================
 # TRANSFORM LOGIC
 # ==============================
+
 if transform_btn:
 
     if not st.session_state.extracted:
+
         st.warning("⚠ Run Extract First")
 
     else:
+
         try:
 
             st.info("Running transformation layer...")
@@ -271,13 +241,25 @@ if transform_btn:
             silver_data = {}
 
             if uploaded["investor"]:
-                silver_data["Investor Master"] = read_table("silver", "investor_master")
+
+                silver_data["Investor Master"] = read_table(
+                    "silver",
+                    "investor_master"
+                )
 
             if uploaded["transaction"]:
-                silver_data["Transactions"] = read_table("silver", "transaction_master")
+
+                silver_data["Transactions"] = read_table(
+                    "silver",
+                    "transaction_master"
+                )
 
             if uploaded["sip"]:
-                silver_data["SIP"] = read_table("silver", "sip_master")
+
+                silver_data["SIP"] = read_table(
+                    "silver",
+                    "sip_master"
+                )
 
             st.session_state.silver_data = silver_data
             st.session_state.transformed = True
@@ -286,13 +268,14 @@ if transform_btn:
             st.success("✔ Transformation Completed + Silver Loaded to DB")
 
         except Exception:
+
             st.error("Transformation Failed")
             st.code(traceback.format_exc())
-
 
 # ==============================
 # PREVIEW
 # ==============================
+
 pretty_names = {
     "Investor Master": "📘 Master Table (Investor)",
     "Transactions": "📊 Transaction Table",
@@ -302,15 +285,25 @@ pretty_names = {
 data_to_show = None
 title = None
 
-if st.session_state.current_layer == "silver" and st.session_state.silver_data:
+if (
+    st.session_state.current_layer == "silver"
+    and st.session_state.silver_data
+):
+
     data_to_show = st.session_state.silver_data
     title = "✨ Silver Layer Preview"
 
-elif st.session_state.current_layer == "bronze" and st.session_state.bronze_data:
+elif (
+    st.session_state.current_layer == "bronze"
+    and st.session_state.bronze_data
+):
+
     data_to_show = st.session_state.bronze_data
     title = "📄 Bronze Layer Preview"
 
-st.markdown(f"## {title if title else '📄 No Data Yet'}")
+st.markdown(
+    f"## {title if title else '📄 No Data Yet'}"
+)
 
 if data_to_show:
 
@@ -320,12 +313,20 @@ if data_to_show:
 
             with st.container(border=True):
 
-                st.markdown(f"### {pretty_names.get(name, name)}")
+                st.markdown(
+                    f"### {pretty_names.get(name, name)}"
+                )
 
                 c1, c2 = st.columns(2)
+
                 c1.metric("Rows", len(df))
                 c2.metric("Columns", len(df.columns))
 
-                st.dataframe(df, use_container_width=True, height=300)
+                st.dataframe(
+                    df,
+                    width="stretch",
+                    height=300
+                )
 
                 st.divider()
+
