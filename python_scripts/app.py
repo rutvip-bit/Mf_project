@@ -59,7 +59,7 @@ col1, col2 = st.columns([10, 2], vertical_alignment="top")
 with col1:
     uploaded_files = st.file_uploader(
         "Upload Files",
-        type=["xlsx"],
+        type=["xlsx", "csv"],
         accept_multiple_files=True,
         key=f"uploader_{st.session_state.uploader_key}"
     )
@@ -86,28 +86,71 @@ st.divider()
 # ==============================
 # FILE LOADER
 # ==============================
+def read_uploaded_file(file):
+    """
+    Read Excel or CSV file and return a DataFrame.
+    """
+
+    filename = file.name.lower()
+
+    if filename.endswith(".csv"):
+
+        encodings = ["utf-8", "utf-8-sig", "latin1", "cp1252"]
+
+        for enc in encodings:
+            try:
+                file.seek(0)
+
+                return pd.read_csv(
+                    file,
+                    encoding=enc,
+                    engine="python",
+                    on_bad_lines="skip"
+                )
+
+            except Exception:
+                continue
+
+        raise Exception(f"Unable to read CSV file: {file.name}")
+
+    elif filename.endswith(".xlsx"):
+        file.seek(0)
+        return pd.read_excel(file)
+
+    return None
+
+
 def load_files(files):
 
-    cams_inv = cams_trans = kfin_inv = kfin_trans = sip_df = None
+    cams_inv = None
+    cams_trans = None
+    kfin_inv = None
+    kfin_trans = None
+    sip_df = None
 
     for file in files:
 
         name = file.name.lower()
 
+        df = read_uploaded_file(file)
+
+        if df is None:
+            continue
+
         if "cams" in name and "inv" in name:
-            cams_inv = pd.read_excel(file)
+            cams_inv = df
 
         elif "cams" in name and "trans" in name:
-            cams_trans = pd.read_excel(file)
+            cams_trans = df
 
         elif "kfin" in name and "investor" in name:
-            kfin_inv = pd.read_excel(file)
+            kfin_inv = df
 
         elif "kfin" in name and "trans" in name:
-            kfin_trans = pd.read_excel(file)
+            kfin_trans = df
 
         elif "sip" in name:
-            sip_df = pd.read_excel(file)
+            sip_df = df
 
     return cams_inv, cams_trans, kfin_inv, kfin_trans, sip_df
 

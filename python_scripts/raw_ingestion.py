@@ -1,7 +1,100 @@
-from etl_investor_master import build_investor_master
-from etl_trans import build_transaction_master
-from etl_sip import extract_sip
+import csv
+import pandas as pd
 
+from etl_investor_master import process_investor_master
+from etl_trans import process_transactions
+from etl_sip import process_sip
+
+
+# =====================================================
+# READ FILE
+# =====================================================
+
+def read_file(file):
+
+    name = file.name.lower()
+
+    # =================================================
+    # CSV / TXT
+    # =================================================
+    if name.endswith((".csv", ".txt")):
+
+        file.seek(0)
+
+        # Read a small sample to detect delimiter
+        sample = file.read(4096).decode("utf-8", errors="ignore")
+        file.seek(0)
+
+        try:
+            delimiter = csv.Sniffer().sniff(
+                sample,
+                delimiters=[",", "\t", ";", "|"]
+            ).delimiter
+        except Exception:
+            delimiter = ","
+
+        try:
+            df = pd.read_csv(
+                file,
+                sep=delimiter,
+                dtype=str,
+                keep_default_na=False,
+                low_memory=False
+            )
+
+        except UnicodeDecodeError:
+
+            file.seek(0)
+            sample = file.read(500).decode("utf-8", errors="ignore")
+            print(sample[:500])
+            file.seek(0)
+
+            df = pd.read_csv(
+                file,
+                sep=delimiter,
+                encoding="latin1",
+                dtype=str,
+                keep_default_na=False,
+                low_memory=False
+            )
+
+    # =================================================
+    # EXCEL
+    # =================================================
+    else:
+
+        file.seek(0)
+
+        df = pd.read_excel(
+            file,
+            dtype=str,
+            keep_default_na=False
+        )
+
+    # =================================================
+    # CLEAN DATA
+    # =================================================
+
+    object_cols = df.select_dtypes(include="object").columns
+
+    if len(object_cols):
+
+        df[object_cols] = (
+            df[object_cols]
+            .replace({"'": ""}, regex=True)
+            .replace(r"^\s+$", "", regex=True)
+        )
+
+        df[object_cols] = df[object_cols].apply(
+            lambda x: x.str.strip()
+        )
+
+    return df
+
+
+# =====================================================
+# EXTRACT
+# =====================================================
 
 def extract_and_push(uploaded_files):
 
@@ -13,45 +106,48 @@ def extract_and_push(uploaded_files):
 
         name = file.name.lower()
 
-        # -------------------------
-        # TRANSACTION FILES
-        # -------------------------
+        df = read_file(file)
+
         if "trans" in name:
-            transaction_files.append(file)
 
-        # -------------------------
-        # INVESTOR FILES
-        # -------------------------
+            transaction_files.append(df)
+
         elif "inv" in name:
-            investor_files.append(file)
 
-        # -------------------------
-        # SIP FILES (NEW)
-        # -------------------------
+            investor_files.append(df)
+
         elif "sip" in name:
-            sip_files.append(file)
 
-    # -------------------------
+            sip_files.append(df)
+
+    # =================================================
     # PROCESS TRANSACTION
-    # -------------------------
+    # =================================================
+
     if transaction_files:
-        build_transaction_master(transaction_files)
 
-    # -------------------------
+        process_transactions(transaction_files)
+
+    # =================================================
     # PROCESS INVESTOR
-    # -------------------------
-    if investor_files:
-        build_investor_master(investor_files)
+    # =================================================
 
-    # -------------------------
-    # PROCESS SIP (NEW)
-    # -------------------------
+    if investor_files:
+
+        process_investor_master(investor_files)
+
+    # =================================================
+    # PROCESS SIP
+    # =================================================
+
     if sip_files:
-        for file in sip_files:
-            extract_sip(file)
+
+        for df in sip_files:
+
+            process_sip(df)
 
     return (
         len(transaction_files),
         len(investor_files),
-        len(sip_files)
+        len(sip_files),
     )
