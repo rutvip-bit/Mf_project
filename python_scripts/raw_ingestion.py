@@ -21,7 +21,6 @@ def read_file(file):
 
         file.seek(0)
 
-        # Read a small sample to detect delimiter
         sample = file.read(4096).decode("utf-8", errors="ignore")
         file.seek(0)
 
@@ -34,20 +33,11 @@ def read_file(file):
             delimiter = ","
 
         try:
-
             file.seek(0)
-
             text = file.read().decode("utf-8")
-
         except UnicodeDecodeError:
-
             file.seek(0)
-
             text = file.read().decode("latin1")
-
-        # =====================================================
-        # PARSE CSV USING SINGLE QUOTES
-        # =====================================================
 
         reader = csv.reader(
             io.StringIO(text),
@@ -70,26 +60,41 @@ def read_file(file):
 
         for i, row in enumerate(rows[1:], start=2):
 
-            if len(row) != expected_cols:
+            if len(row) == expected_cols:
 
-                bad_rows += 1
+                clean_rows.append(row)
+                continue
 
-                print(f"\nProblem found at row {i}")
-                print(f"Expected Columns : {expected_cols}")
-                print(f"Found Columns    : {len(row)}")
+            bad_rows += 1
 
-                # Print only first few values to avoid flooding terminal
-                print(row[:10])
+            print(f"\nProblem found at row {i}")
+            print(f"Expected Columns : {expected_cols}")
+            print(f"Found Columns    : {len(row)}")
 
-            # Extra columns -> keep only expected columns
-            if len(row) > expected_cols:
-                row = row[:expected_cols]
+            # ------------------------------------------------
+            # One extra column (your CAMS issue)
+            # ------------------------------------------------
+            if len(row) == expected_cols + 1:
 
-            # Missing columns -> pad with blanks
+                print("Fixing split address...")
+
+                # Merge the split address columns
+                row[3] = row[3] + "," + row[4]
+
+                del row[4]
+
+                clean_rows.append(row)
+
             elif len(row) < expected_cols:
-                row = row + [""] * (expected_cols - len(row))
 
-            clean_rows.append(row)
+                print("Padding missing columns...")
+
+                row.extend([""] * (expected_cols - len(row)))
+                clean_rows.append(row)
+
+            else:
+
+                print("Skipping row")
 
         print("Total Bad Rows :", bad_rows)
         print("=" * 80)
@@ -156,10 +161,6 @@ def read_file(file):
     print("TOTAL COLUMNS :", len(df.columns))
     print("COLUMN NAMES :")
     print(df.columns.tolist())
-
-    print("\nSample Rows (1340-1355):")
-    print(df.iloc[1340:1355])
-
     print("=" * 80 + "\n")
 
     return df
