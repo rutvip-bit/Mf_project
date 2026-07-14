@@ -166,67 +166,63 @@ def read_file(file):
     return df
 
 
-# =====================================================
-# EXTRACT
-# =====================================================
-
 def extract_and_push(uploaded_files):
 
     transaction_files = []
-    investor_files = []
+    cams_investor = []
+    kfin_investor = []
     sip_files = []
 
     for file in uploaded_files:
 
         name = file.name.lower()
-
         df = read_file(file)
 
         if "trans" in name:
-
             transaction_files.append(df)
 
         elif "inv" in name:
 
-            investor_files.append(df)
+            if "cams" in name:
+                cams_investor.append(df)
+
+            elif "kfin" in name or "karvy" in name:
+                kfin_investor.append(df)
+
+            else:
+                cams_investor.append(df)
 
         elif "sip" in name:
-
             sip_files.append(df)
 
-    # =================================================
-    # PROCESS TRANSACTION
-    # =================================================
-
+    # Transactions
     if transaction_files:
-
         process_transactions(transaction_files)
 
-    # =================================================
-    # PROCESS INVESTOR
-    # =================================================
+    # Investors
+    cams_df = (
+        pd.concat(cams_investor, ignore_index=True)
+        if cams_investor else None
+    )
 
-    if investor_files:
+    kfin_df = (
+        pd.concat(kfin_investor, ignore_index=True)
+        if kfin_investor else None
+    )
 
-        investor_df = pd.concat(
-            investor_files,
-            ignore_index=True
+    if cams_df is not None or kfin_df is not None:
+        process_investor_master(
+            cams=cams_df,
+            kfin=kfin_df
         )
 
-        process_investor_master(cams=investor_df)
-
-    # =================================================
-    # PROCESS SIP
-    # =================================================
-
+    # SIP
     if sip_files:
-
         for df in sip_files:
-
             process_sip(df)
 
     return (
         len(transaction_files),
-        len(investor_files),
+        len(cams_investor) + len(kfin_investor),
         len(sip_files),
     )
