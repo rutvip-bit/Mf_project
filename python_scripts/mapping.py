@@ -4,6 +4,8 @@
 
 INVESTOR_MASTER_MAPPING = {
 
+    "source": ["source"],
+
     # ================= CORE IDENTIFIERS =================
     "folio_no": ["foliochk", "folio", "FOLIO", "FOLIO_NO"],
     "investor_name": ["inv_name", "INV_NAME", "investor_name"],

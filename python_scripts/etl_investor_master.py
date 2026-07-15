@@ -253,7 +253,7 @@ def format_dates(df):
 # APPLY INVESTOR MAPPING
 # =====================================================
 
-def apply_investor_mapping(raw_df, mapping):
+def apply_investor_mapping(raw_df, mapping, source):
 
     raw_df = clean_columns(raw_df)
 
@@ -273,6 +273,10 @@ def apply_investor_mapping(raw_df, mapping):
             "created_at",
             "updated_at"
         ]:
+            continue
+
+        if target_col == "source":
+            mapped_df[target_col] = source
             continue
 
         value = None
@@ -313,7 +317,8 @@ def process_investor_master(cams=None, kfin=None):
 
         cams_df = apply_investor_mapping(
             cams,
-            INVESTOR_MASTER_MAPPING
+            INVESTOR_MASTER_MAPPING,
+            "CAMS"
         )
 
         cams_df = normalize(cams_df)
@@ -333,7 +338,8 @@ def process_investor_master(cams=None, kfin=None):
 
         kfin_df = apply_investor_mapping(
             kfin,
-            INVESTOR_MASTER_MAPPING
+            INVESTOR_MASTER_MAPPING,
+            "KFIN"
         )
 
         kfin_df = normalize(kfin_df)
