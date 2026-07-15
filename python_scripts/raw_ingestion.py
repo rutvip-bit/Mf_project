@@ -203,7 +203,7 @@ def extract_and_push(uploaded_files):
         elif "inv" in name:
 
             if "cams" in name:
-                cams_investor.append(df)
+                cams_investor.append(df) 
 
             elif "kfin" in name or "karvy" in name:
                 kfin_investor.append(df)
