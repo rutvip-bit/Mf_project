@@ -238,220 +238,254 @@ INVESTOR_MASTER_MAPPING = {
 
 TRANSACTION_MASTER_MAPPING = {
  
-    # =====================================================
-    # 1-10
-    # =====================================================
-    "source_system": [],
+    "source": [],
+    # ================= CORE =================
  
-    "prod": ["prod", "fmcode"],
-    "folio_no": ["folio_no", "td_acno"],
-    "scheme": ["scheme", "funddesc"],
-    "investor_name": ["investor_name", "inv_name", "invname"],
-    "transaction_type": ["transaction_type", "trxntype", "td_trtype"],
-    "transaction_no": ["transaction_no", "trxnno", "td_trno"],
-    "transaction_mode": ["transaction_mode", "trxnmode", "trnmode"],
-    "transaction_status": ["transaction_status", "trxnstat", "trnstat"],
-    "trade_date": ["trade_date", "traddate", "td_trdt"],
+    "amc_code": [ "amc_code","fmcode","td_fund"],
+    "folio_no": ["folio_no","td_acno"],
+    "prodcode": ["prodcode","schpln","td_scheme"],
+    "scheme": ["scheme","funddesc","td_scheme"],
  
-    # =====================================================
-    # 11-20
-    # =====================================================
-    "post_date": ["post_date", "postdate", "td_prdt"],
-    "units": ["units", "td_units"],
-    "amount": ["amount", "td_amt"],
-    "broker_code": ["broker_code", "brokcode", "td_agent"],
-    "broker_percent": ["broker_percent", "brokperc", "brokper"],
-    "broker_commission": ["broker_commission", "brokcomm"],
-    "location": ["location", "td_branch"],
-    "tax_status": ["tax_status", "status"],
-    "load_amount": ["load", "load1"],
-    "bank_name": ["bank_name", "bname"],
+    "inv_name": ["inv_name","invname"],
  
-    # =====================================================
-    # 21-30
-    # =====================================================
-    "account_no": ["account_no", "ac_no", "bnkacno"],
-    "report_date": ["rep_date", "crdate"],
-    "pan": ["pan", "pangno"],
-    "prodcode": ["prodcode"],
-    "usercode": ["usercode"],
-    "usrtrxno": ["usrtrxno"],
-    "purprice": ["purprice"],
-    "subbrok": ["subbrok"],
-    "altfolio": ["altfolio"],
-    "time1": ["time1"],
  
-    # =====================================================
-    # 31-40
-    # =====================================================
-    "trxnsubtyp": ["trxnsubtyp"],
-    "applicatio": ["applicatio"],
-    "trxn_natur": ["trxn_natur"],
-    "tax": ["tax"],
-    "total_tax": ["total_tax"],
-    "te_15h": ["te_15h"],
-    "micr_no": ["micr_no"],
-    "remarks": ["remarks"],
-    "swflag": ["swflag"],
-    "old_folio": ["old_folio"],
+    # ================= TRANSACTION =================
  
-    # =====================================================
-    # 41-50
-    # =====================================================
-    "seq_no": ["seq_no"],
-    "reinvest_f": ["reinvest_f"],
-    "mult_brok": ["mult_brok"],
-    "stt": ["stt"],
-    "scheme_typ": ["scheme_typ"],
-    "scanrefno": ["scanrefno"],
-    "inv_iin": ["inv_iin"],
-    "targ_src_s": ["targ_src_s"],
-    "trxn_type_": ["trxn_type_"],
-    "ticob_trty": ["ticob_trty"],
+    "trxntype": ["trxntype","td_trtype"],
+    "trxnno": ["trxnno","td_trno"],
+    "trxnmode": ["trxnmode","trnmode"],
+    "trxnstat": ["trxnstat","trnstat"],
  
-    # =====================================================
-    # 51-55
-    # =====================================================
-    "ticob_trno": ["ticob_trno"],
-    "ticob_post": ["ticob_post"],
-    "dp_id": ["dp_id"],
-    "trxn_charg": ["trxn_charg"],
-    "eligib_amt": ["eligib_amt"],
-        # =====================================================
-    # 56-60
-    # =====================================================
-    "src_of_txn": ["src_of_txn"],
-    "trxn_suffi": ["trxn_suffi"],
-    "siptrxnno": ["siptrxnno"],
-    "ter_locati": ["ter_locati"],
-    "euin": ["euin"],
+    "usercode": [
+        "usercode"
+    ],
  
-    # =====================================================
-    # 61-70
-    # =====================================================
-    "euin_valid": ["euin_valid"],
-    "euin_opted": ["euin_opted"],
-    "sub_brk_ar": ["sub_brk_ar"],
-    "exch_dc_fl": ["exch_dc_fl"],
-    "src_brk_co": ["src_brk_co"],
-    "sys_regn_d": ["sys_regn_d"],
-    "reversal_c": ["reversal_c"],
-    "exchange_f": ["exchange_f"],
-    "ca_initiat": ["ca_initiat"],
-    "gst_state_": ["gst_state_"],
+    "usrtrxno": [
+        "usrtrxno"
+    ],
  
-    # =====================================================
-    # 71-80
-    # =====================================================
-    "igst_amoun": ["igst_amoun"],
-    "cgst_amoun": ["cgst_amoun"],
-    "sgst_amoun": ["sgst_amoun"],
-    "rev_remark": ["rev_remark"],
-    "original_t": ["original_t"],
-    "stamp_duty": ["stamp_duty"],
-    "folio_old": ["folio_old", "old_folio"],
-    "scheme_fol": ["scheme_fol"],
-    "amc_ref_no": ["amc_ref_no"],
-    "request_re": ["request_re"],
  
-    # =====================================================
-    # 81-90
-    # =====================================================
-    "transmissi": ["transmissi"],
-    "sno": ["sno"],
-    "fmcode": ["fmcode", "prod"],
-    "td_fund": ["td_fund"],
-    "schpln": ["schpln"],
-    "divopt": ["divopt"],
-    "td_purred": ["td_purred"],
-    "smcode": ["smcode"],
-    "chqno": ["chqno"],
-    "jtname1": ["jtname1"],
+    # ================= DATE =================
  
-    # =====================================================
-    # 91-100
-    # =====================================================
-    "jtname2": ["jtname2"],
-    "add1": ["add1"],
-    "add2": ["add2"],
-    "add3": ["add3"],
-    "city": ["city"],
-    "pin": ["pin"],
-    "state": ["state"],
-    "country": ["country"],
-    "dob": ["dob"],
-    "rphone": ["rphone"],
+    "traddate": [
+        "traddate",
+        "td_trdt"
+    ],
  
-    # =====================================================
-    # 101-110
-    # =====================================================
-    "rphone1": ["rphone1"],
-    "rphone2": ["rphone2"],
-    "mobile": ["mobile"],
-    "ophone": ["ophone"],
-    "ophone1": ["ophone1"],
-    "ophone2": ["ophone2"],
-    "fax": ["fax"],
-    "faxoff": ["faxoff"],
-    "status": ["status"],
-    "occpn": ["occpn"],
-    # =====================================================
-    # 111-120
-    # =====================================================
-    "email": ["email"],
-    "bnkacno": ["bnkacno", "account_no", "ac_no"],
-    "bname": ["bname", "bank_name"],
-    "bnkactype": ["bnkactype"],
-    "branch": ["branch"],
-    "badd1": ["badd1"],
-    "badd2": ["badd2"],
-    "badd3": ["badd3"],
-    "bcity": ["bcity"],
-    "bphone": ["bphone"],
+    "postdate": [
+        "postdate",
+        "td_prdt"
+    ],
  
-    # =====================================================
-    # 121-130
-    # =====================================================
-    "pangno": ["pangno", "pan"],
-    "isctrno": ["isctrno"],
-    "td_pop": ["td_pop"],
-    "loadper": ["loadper"],
-    "td_agent": ["td_agent", "broker_code"],
-    "td_broker": ["td_broker"],
-    "invid": ["invid"],
-    "crtime": ["crtime"],
-    "trnsub": ["trnsub"],
-    "td_appno": ["td_appno"],
+    "rep_date": [
+        "rep_date"
+    ],
  
-    # =====================================================
-    # 131-140
-    # =====================================================
-    "unqno": ["unqno"],
-    "trdesc": ["trdesc"],
-    "purdate": ["purdate"],
-    "puramt": ["puramt"],
-    "purunits": ["purunits"],
-    "trflag": ["trflag"],
-    "sfunddt": ["sfunddt"],
-    "chqdate": ["chqdate"],
-    "chqbank": ["chqbank"],
-    "nctremarks": ["nctremarks"],
  
-    # =====================================================
-    # 141-149
-    # =====================================================
-    "td_scheme": ["td_scheme"],
-    "td_plan": ["td_plan"],
-    "td_nav": ["td_nav"],
-    "annper": ["annper"],
-    "annamt": ["annamt"],
-    "td_ptrno": ["td_ptrno"],
-    "td_pbranch": ["td_pbranch"],
-    "oldacno": ["oldacno"],
+    # ================= AMOUNT =================
  
-    # =====================================================
-    # AUDIT COLUMNS
-    # =====================================================
+    "purprice": [
+        "purprice",
+        "td_nav"
+    ],
+ 
+    "units": [
+        "units",
+        "td_units"
+    ],
+ 
+    "amount": [
+        "amount",
+        "td_amt"
+    ],
+ 
+ 
+    # ================= BROKER =================
+ 
+    "brokcode": [
+        "brokcode",
+        "td_broker"
+    ],
+ 
+    "subbrok": [
+        "subbrok",
+        "td_agent"
+    ],
+ 
+    "brokperc": [
+        "brokperc",
+        "brokper"
+    ],
+ 
+    "brokcomm": [
+        "brokcomm"
+    ],
+ 
+ 
+    # ================= FOLIO =================
+ 
+    "altfolio": [
+        "altfolio"
+    ],
+ 
+    "old_folio": [
+        "old_folio",
+        "oldacno"
+    ],
+ 
+    "folio_old": [
+        "folio_old"
+    ],
+ 
+    "scheme_folio_number": [
+        "scheme_folio_number"
+    ],
+ 
+ 
+    # ================= TRANSACTION TYPE =================
+ 
+    "trxnsubtyp": [
+        "trxnsubtyp",
+        "trnsub"
+    ],
+ 
+    "trxn_nature": [
+        "trxn_nature",
+        "trdesc"
+    ],
+ 
+ 
+    # ================= APPLICATION =================
+ 
+    "application_no": [
+        "application_no",
+        "td_appno"
+    ],
+ 
+    "remarks": [
+        "remarks",
+        "nctremarks"
+    ],
+ 
+ 
+    # ================= BANK =================
+ 
+    "ac_no": [
+        "ac_no",
+        "bnkacno"
+    ],
+ 
+    "bank_name": [
+        "bank_name",
+        "bname"
+    ],
+ 
+ 
+    # ================= LOCATION =================
+ 
+    "location": [
+        "location",
+        "td_branch"
+    ],
+ 
+    "ter_location": [
+        "ter_location"
+    ],
+ 
+ 
+    # ================= TAX =================
+ 
+    "tax_status": [
+        "tax_status",
+        "status"
+    ],
+ 
+    "gst_state_code": [
+        "gst_state_code"
+    ],
+ 
+    "tax": [
+        "tax"
+    ],
+ 
+    "total_tax": [
+        "total_tax"
+    ],
+ 
+    "stt": [
+        "stt"
+    ],
+ 
+ 
+    # ================= OTHER TRANSACTION =================
+ 
+    "load": [
+        "load",
+        "load1"
+    ],
+ 
+    "src_of_txn": [
+        "src_of_txn",
+        "td_pop"
+    ],
+ 
+    "scanrefno": [
+        "scanrefno"
+    ],
+ 
+    "pan": [
+        "pan"
+    ],
+ 
+    "inv_iin": [
+        "inv_iin"
+    ],
+ 
+ 
+    # ================= FLAGS =================
+ 
+    "swflag": [
+        "swflag"
+    ],
+ 
+    "reinvest_flag": [
+        "reinvest_flag"
+    ],
+ 
+    "mult_brok": [
+        "mult_brok"
+    ],
+ 
+    "transmission_flag": [
+        "transmission_flag"
+    ],
+ 
+ 
+    # ================= KFIN ONLY =================
+ 
+    "chqno": [
+        "chqno"
+    ],
+ 
+    "chqdate": [
+        "chqdate"
+    ],
+ 
+    "chqbank": [
+        "chqbank"
+    ],
+ 
+    "td_plan": [
+        "td_plan"
+    ],
+ 
+    "divopt": [
+        "divopt"
+    ],
+ 
+ 
+    # ================= SYSTEM =================
+ 
     "flag": [],
     "created_at": [],
     "updated_at": []

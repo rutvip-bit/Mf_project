@@ -198,7 +198,7 @@ if extract_btn:
         if uploaded_types["transaction"]:
             bronze_data["Transactions"] = read_table(
                 "bronze",
-                "transaction_master"
+                "transaction_master_new"
             )
 
         if uploaded_types["sip"]:
@@ -251,7 +251,7 @@ if transform_btn:
 
                 silver_data["Transactions"] = read_table(
                     "silver",
-                    "transaction_master"
+                    "transaction_master_new"
                 )
 
             if uploaded["sip"]:

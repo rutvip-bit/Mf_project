@@ -302,7 +302,7 @@ def load_silver():
 
     transaction_df = safe_read("""
         SELECT *
-        FROM bronze.transaction_master
+        FROM bronze.transaction_master_new
         WHERE flag = 0
     """)
 
@@ -319,7 +319,7 @@ def load_silver():
 
         append_new_rows(
             transaction_df,
-            "transaction_master"
+            "transaction_master_new"
         )
 
     # =====================================================
