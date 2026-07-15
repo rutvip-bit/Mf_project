@@ -21,23 +21,32 @@ def read_file(file):
 
         file.seek(0)
 
-        sample = file.read(4096).decode("utf-8", errors="ignore")
-        file.seek(0)
-
         try:
-            delimiter = csv.Sniffer().sniff(
-                sample,
-                delimiters=[",", "\t", ";", "|"]
-            ).delimiter
-        except Exception:
-            delimiter = ","
-
-        try:
-            file.seek(0)
             text = file.read().decode("utf-8")
         except UnicodeDecodeError:
             file.seek(0)
             text = file.read().decode("latin1")
+
+
+        # FIX WINDOWS NEWLINE ISSUE
+        text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+        # Detect delimiter
+        first_line = text.split("\n")[0]
+
+        if "\t" in first_line:
+            delimiter = "\t"
+
+        elif "," in first_line:
+            delimiter = ","
+
+        elif ";" in first_line:
+            delimiter = ";"
+
+        else:
+            delimiter = "\t"
+
 
         reader = csv.reader(
             io.StringIO(text),
@@ -46,58 +55,60 @@ def read_file(file):
             skipinitialspace=True
         )
 
-        rows = list(reader)
 
-        header = rows[0]
-        expected_cols = len(header)
+        rows = []
+
+        for row in reader:
+            rows.append(row)
+
+
+        header = [
+            h.strip()
+            .strip("'")
+            .strip('"')
+            for h in rows[0]
+        ]
+
 
         clean_rows = []
 
-        print("=" * 80)
-        print("Header Columns :", expected_cols)
 
-        bad_rows = 0
+        for row in rows[1:]:
 
-        for i, row in enumerate(rows[1:], start=2):
+            row = [
+                x.strip()
+                .strip("'")
+                .strip('"')
+                for x in row
+            ]
 
-            if len(row) == expected_cols:
-
-                clean_rows.append(row)
-                continue
-
-            bad_rows += 1
-
-            print(f"\nProblem found at row {i}")
-            print(f"Expected Columns : {expected_cols}")
-            print(f"Found Columns    : {len(row)}")
-
-            # ------------------------------------------------
-            # One extra column (your CAMS issue)
-            # ------------------------------------------------
-            if len(row) == expected_cols + 1:
-
-                print("Fixing split address...")
-
-                # Merge the split address columns
-                row[3] = row[3] + "," + row[4]
-
-                del row[4]
+            if len(row) == len(header):
 
                 clean_rows.append(row)
 
-            elif len(row) < expected_cols:
 
-                print("Padding missing columns...")
+            elif len(row) < len(header):
 
-                row.extend([""] * (expected_cols - len(row)))
+                row.extend(
+                    [""] * (len(header) - len(row))
+                )
+
                 clean_rows.append(row)
+
 
             else:
 
-                print("Skipping row")
+                print(
+                    "Skipping bad row. Expected:",
+                    len(header),
+                    "Found:",
+                    len(row)
+                )
 
-        print("Total Bad Rows :", bad_rows)
-        print("=" * 80)
+                clean_rows.append(
+                    row[:len(header)]
+                )
+
 
         df = pd.DataFrame(
             clean_rows,
@@ -168,7 +179,8 @@ def read_file(file):
 
 def extract_and_push(uploaded_files):
 
-    transaction_files = []
+    cams_transaction = []
+    kfin_transaction = []
     cams_investor = []
     kfin_investor = []
     sip_files = []
@@ -179,7 +191,14 @@ def extract_and_push(uploaded_files):
         df = read_file(file)
 
         if "trans" in name:
-            transaction_files.append(df)
+            if "cams" in name:
+                cams_transaction.append(df)
+
+            elif "kfin" in name or "karvy" in name:
+                kfin_transaction.append(df)
+
+            else:
+                cams_transaction.append(df)
 
         elif "inv" in name:
 
@@ -210,20 +229,26 @@ def extract_and_push(uploaded_files):
     # Transactions
     # =====================================================
 
-    transaction_df = (
-        pd.concat(
-            transaction_files,
+    transaction_df = None
+
+    if cams_transaction or kfin_transaction:
+
+        transaction_df = pd.concat(
+            cams_transaction + kfin_transaction,
             ignore_index=True
         )
-        if transaction_files
-        else None
-    )
 
     if transaction_df is not None:
 
         process_transactions(
             cams=transaction_df
         )
+        print("=" * 80)
+        print("TRANSACTION DATA BEFORE ETL")
+        print(transaction_df.shape)
+        print(transaction_df.head(3))
+        print(transaction_df.columns.tolist())
+        print("=" * 80)
 
     # Investors
     cams_df = (
@@ -252,7 +277,7 @@ def extract_and_push(uploaded_files):
                 )
 
     return (
-        len(transaction_files),
+        len(cams_transaction) + len(kfin_transaction),
         len(cams_investor) + len(kfin_investor),
         len(sip_files),
     )

@@ -372,7 +372,8 @@ def process_transactions(cams=None, kfin=None):
     ignore_cols = {
         "flag",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "source"
     }
 
     if existing.empty:
