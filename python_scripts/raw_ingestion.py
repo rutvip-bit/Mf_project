@@ -193,7 +193,18 @@ def extract_and_push(uploaded_files):
                 cams_investor.append(df)
 
         elif "sip" in name:
-            sip_files.append(df)
+
+            if "cams" in name:
+
+                sip_files.append(("CAMS", df))
+
+            elif "kfin" in name or "karvy" in name:
+
+                sip_files.append(("KFIN", df))
+
+            else:
+
+                sip_files.append(("UNKNOWN", df))
 
     # Transactions
     if transaction_files:
@@ -218,8 +229,12 @@ def extract_and_push(uploaded_files):
 
     # SIP
     if sip_files:
-        for df in sip_files:
-            process_sip(df)
+            for source, df in sip_files:
+
+                process_sip(
+                    sip_df=df,
+                    source=source
+                )
 
     return (
         len(transaction_files),

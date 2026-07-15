@@ -328,7 +328,7 @@ def load_silver():
 
     sip_df = safe_read("""
         SELECT *
-        FROM bronze.sip_master
+        FROM bronze.sip_master_new
         WHERE flag = 0
     """)
 
@@ -345,7 +345,7 @@ def load_silver():
 
         append_new_rows(
             sip_df,
-            "sip_master"
+            "sip_master_new"
         )
 
     print("\nSilver Layer Loaded Successfully")

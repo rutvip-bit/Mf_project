@@ -456,96 +456,111 @@ TRANSACTION_MASTER_MAPPING = {
 }
 
 # =========================================================
-# SIP MASTER MAPPING (SAFE + CLEAN)
-# Target: bronze.sip_master
+# SIP MASTER MAPPING
+# Target: bronze.sip_master_new
 # =========================================================
+
 SIP_MASTER_MAPPING = {
 
     # =====================================================
-    # LOCATION
+    # SOURCE
     # =====================================================
-    "zone": ["Zone"],
-    "branch": ["Branch"],
-    "location": ["Location"],
+    "source": ["source"],
 
     # =====================================================
-    # IDENTIFIERS
+    # PRODUCT
     # =====================================================
-    "ihno": ["Ihno"],
-    "folio": ["Folio"],
+    "product": ["PRODUCT"],
+    "scheme": ["SCHEME"],
 
     # =====================================================
     # INVESTOR
     # =====================================================
-    "investor_name": ["Investor Name"],
+    "folio_no": ["FOLIO_NO"],
+    "inv_name": ["INV_NAME"],
     "pan": ["PAN"],
 
     # =====================================================
-    # SIP DETAILS
+    # AUTO TRANSACTION
     # =====================================================
-    "registration_date": ["RegistrationDate"],
-    "start_date": ["Start Date"],
-    "end_date": ["End Date"],
-    "terminate_date": ["TerminateDate"],
-
-    "no_of_installments": ["No Of Installments"],
-    "amount": ["Amount"],
-
-    "sip_type": ["SipType"],
-    "sip_mode": ["SIP Mode"],
-    "frequency": ["Frequency"],
+    "aut_trntyp": ["AUT_TRNTYP"],
+    "auto_trno": ["AUTO_TRNO"],
+    "auto_amount": ["AUTO_AMOUNT"],
 
     # =====================================================
-    # SCHEME
+    # DATES
     # =====================================================
-    "scheme": ["Scheme"],
-    "plan": ["Plan"],
-    "scheme_name": ["Scheme Name"],
-
-    "fund_code": ["Fund Code"],
-    "product_code": ["Product Code"],
-
-    "to_scheme": ["To Scheme"],
-    "to_plan": ["To Plan"],
-    "to_product_code": ["ToProductCode"],
-    "to_scheme_name": ["ToSchemeName"],
+    "from_date": ["FROM_DATE"],
+    "to_date": ["TO_DATE"],
+    "cease_date": ["CEASE_DATE"],
+    "reg_date": ["REG_DATE"],
+    "pause_from_date": ["PAUSE_FROM_DATE"],
+    "pause_to_date": ["PAUSE_TO_DATE"],
 
     # =====================================================
-    # AGENT
+    # PERIODICITY
     # =====================================================
-    "agent_code": ["AgentCode"],
-    "agent_name": ["AgentName"],
-    "subbroker": ["Subbroker"],
+    "periodicity": ["PERIODICITY"],
+    "period_day": ["PERIOD_DAY"],
 
     # =====================================================
-    # TRANSACTION
+    # INVESTOR DETAILS
     # =====================================================
-    "trtype": ["Trtype"],
+    "inv_iin": ["INV_IIN"],
+    "payment_mode": ["PAYMENT_MODE"],
 
     # =====================================================
-    # STATUS
+    # TARGET SCHEME
     # =====================================================
-    "status": ["Status"],
+    "target_scheme": ["TARGET_SCHEME"],
+    "target_scheme_code": ["TARGET_SCHEME_CODE"],
 
     # =====================================================
-    # ECS
+    # BROKER
     # =====================================================
-    "ecsno": ["ECSNO"],
-    "ecs_bank_name": ["ECSBankName"],
-    "ecs_acno": ["ECSAcno"],
-    "ecs_holder_name": ["ECSHolderName"],
+    "subbroker": ["SUBBROKER"],
+    "sub_arn_code": ["SUB_ARN_CODE"],
+    "euin": ["EUIN"],
+    "ter_location": ["TER_LOCATION"],
 
     # =====================================================
-    # REGISTRATION
+    # REMARKS
     # =====================================================
-    "reg_slno": ["RegSlno"],
-    "inv_dp_id": ["InvDpId"],
-    "inv_client_id": ["InvClientId"],
-    "dp_inv_name": ["DP_InvName"],
+    "remarks": ["REMARKS"],
 
     # =====================================================
-    # CONTROL
+    # TOP UP
     # =====================================================
-    "modify_flag": ["ModifyFlag"],
-    "umrncode": ["umrncode"]
+    "top_up_frq": ["TOP_UP_FRQ"],
+    "top_up_amt": ["TOP_UP_AMT"],
+    "top_up_perc": ["TOP_UP_PERC"],
+
+    # =====================================================
+    # BANK
+    # =====================================================
+    "ac_type": ["AC_TYPE"],
+    "bank": ["BANK"],
+    "branch": ["BRANCH"],
+    "instrm_no": ["INSTRM_NO"],
+    "cheq_micr_no": ["CHEQ_MICR_NO"],
+    "ac_holder_name": ["AC_HOLDER_NAME"],
+
+    # =====================================================
+    # SCHEME DETAILS
+    # =====================================================
+    "scheme_code": ["SCHEME_CODE"],
+    "amc_code": ["AMC_CODE"],
+    "user_code": ["USER_CODE"],
+    "package_name": ["PACKAGE_NAME"],
+    "special_product": ["SPECIAL_PRODUCT"],
+    "subtrxndesc": ["SUBTRXNDESC"],
+
+    # =====================================================
+    # ADDITIONAL
+    # =====================================================
+    "folio_old": ["FOLIO_OLD"],
+    "ft_sip_regno": ["FT_SIP_REGNO"],
+    "scheme_folio_number": ["SCHEME_FOLIO_NUMBER"],
+    "request_ref_no": ["REQUEST_REF_NO"]
+
 }

@@ -204,7 +204,7 @@ if extract_btn:
         if uploaded_types["sip"]:
             bronze_data["SIP"] = read_table(
                 "bronze",
-                "sip_master"
+                "sip_master_new"
             )
 
         st.session_state.bronze_data = bronze_data
@@ -258,7 +258,7 @@ if transform_btn:
 
                 silver_data["SIP"] = read_table(
                     "silver",
-                    "sip_master"
+                    "sip_master_new"
                 )
 
             st.session_state.silver_data = silver_data

@@ -392,7 +392,8 @@ def process_investor_master(cams=None, kfin=None):
     ignore_cols = {
         "flag",
         "created_at",
-        "updated_at"
+        "updated_at",
+        "source"
     }
 
     if existing.empty:
@@ -516,7 +517,7 @@ def process_investor_master(cams=None, kfin=None):
 
     df = df[db_columns]
 
-        # =====================================================
+    # =====================================================
     # FINAL DATE CLEANING
     # =====================================================
 
