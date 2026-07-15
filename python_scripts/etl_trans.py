@@ -1,15 +1,8 @@
 import pandas as pd
-from sqlalchemy import create_engine
 
+from utils.db import engine
 from mapping import TRANSACTION_MASTER_MAPPING
 
-# =====================================================
-# DATABASE CONNECTION
-# =====================================================
-
-engine = create_engine(
-    "postgresql+psycopg2://postgres:postgres123@localhost:5432/tr_project"
-)
 
 # =====================================================
 # CLEAN COLUMN NAMES
@@ -24,8 +17,10 @@ def clean_columns(df):
 
     df.columns = (
         df.columns.astype(str)
-        .str.lower()
         .str.strip()
+        .str.strip("'")
+        .str.strip('"')
+        .str.lower()
         .str.replace(" ", "_", regex=False)
         .str.replace("-", "_", regex=False)
         .str.replace("/", "_", regex=False)
@@ -36,87 +31,7 @@ def clean_columns(df):
 
 
 # =====================================================
-# NORMALIZE DATA
-# =====================================================
-
-def normalize(df):
-
-    if df is None:
-        return df
-
-    df = df.copy()
-
-    obj_cols = df.select_dtypes(include=["object"]).columns
-
-    for col in obj_cols:
-
-        df[col] = (
-            df[col]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .replace({
-                "nan": "",
-                "None": "",
-                "<NA>": "",
-                "NaT": ""
-            })
-        )
-
-    return df
-
-
-# =====================================================
-# CLEAN VALUE
-# =====================================================
-
-def clean_value(v):
-
-    if pd.isna(v):
-        return ""
-
-    return str(v).strip()
-
-
-# =====================================================
-# APPLY TRANSACTION MAPPING
-# =====================================================
-
-def apply_transaction_mapping(raw_df, mapping, source_name):
-
-    raw_df = clean_columns(raw_df)
-
-    mapped_df = pd.DataFrame(index=raw_df.index)
-
-    for target_col, source_cols in mapping.items():
-
-        if target_col == "source_system":
-            mapped_df[target_col] = source_name
-            continue
-
-        if target_col in ["flag", "created_at", "updated_at"]:
-            continue
-
-        value = None
-
-        for src in source_cols:
-
-            src = src.lower()
-
-            if src in raw_df.columns:
-                value = raw_df[src]
-                break
-
-        if value is None:
-            value = pd.Series([None] * len(raw_df), index=raw_df.index)
-
-        mapped_df[target_col] = value
-
-    return mapped_df
-
-
-# =====================================================
-# FORMAT DATE COLUMNS
+# DATE COLUMNS
 # =====================================================
 
 DATE_COLUMNS = [
@@ -133,40 +48,241 @@ DATE_COLUMNS = [
 ]
 
 
+# =====================================================
+# IDENTIFIER COLUMNS
+# (.0 SHOULD NEVER APPEAR)
+# =====================================================
+
+IDENTIFIER_COLUMNS = [
+
+    "folio_no",
+    "old_folio",
+    "folio_old",
+    "scheme_fol",
+    "altfolio",
+
+    "account_no",
+    "bnkacno",
+    "oldacno",
+
+    "micr_no",
+    "chqno",
+
+    "request_re",
+    "amc_ref_no",
+
+    "pan",
+    "pangno",
+
+    "mobile",
+    "rphone",
+    "rphone1",
+    "rphone2",
+    "ophone",
+    "ophone1",
+    "ophone2",
+    "bphone",
+
+    "pin"
+]
+
+
+# =====================================================
+# NORMALIZE
+# =====================================================
+
+def normalize(df):
+
+    if df is None:
+        return df
+
+    df = df.copy()
+
+    for col in df.columns:
+
+        if col in DATE_COLUMNS:
+            continue
+
+        if pd.api.types.is_datetime64_any_dtype(df[col]):
+            continue
+
+        df[col] = (
+            df[col]
+            .fillna("")
+            .astype(str)
+            .str.replace("'", "", regex=False)
+            .str.replace('"', "", regex=False)
+            .str.strip()
+            .replace({
+                "nan": "",
+                "None": "",
+                "<NA>": "",
+                "NaT": ""
+            })
+        )
+
+    return df
+
+
+# =====================================================
+# CLEAN IDENTIFIER COLUMNS
+# =====================================================
+
+def clean_identifier_columns(df):
+
+    if df is None:
+        return df
+
+    df = df.copy()
+
+    for col in IDENTIFIER_COLUMNS:
+
+        if col not in df.columns:
+            continue
+
+        df[col] = (
+            df[col]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.replace(r"\.0$", "", regex=True)
+            .replace({
+                "": None,
+                "nan": None,
+                "None": None,
+                "<NA>": None
+            })
+        )
+
+    return df
+
+
+# =====================================================
+# CLEAN VALUE
+# =====================================================
+
+def clean_value(value):
+
+    if pd.isna(value):
+        return None
+
+    value = str(value).strip()
+
+    if value.lower() in [
+
+        "",
+        "nan",
+        "none",
+        "<na>",
+        "nat"
+
+    ]:
+
+        return None
+
+    return value
+
+
+# =====================================================
+# FORMAT DATE COLUMNS
+# =====================================================
+
 def format_dates(df):
+
+    if df is None:
+        return df
+
+    df = df.copy()
 
     for col in DATE_COLUMNS:
 
         if col in df.columns:
 
-            df[col] = pd.to_datetime(
-                df[col],
-                errors="coerce"
+            df[col] = (
+                pd.to_datetime(
+                    df[col],
+                    format="mixed",
+                    errors="coerce"
+                )
+                .dt.date
+            )
+
+            df[col] = df[col].where(
+                pd.notnull(df[col]),
+                None
             )
 
     return df
 
 # =====================================================
-# PROCESS TRANSACTION MASTER
+# APPLY TRANSACTION MAPPING
+# =====================================================
+
+def apply_transaction_mapping(raw_df, mapping, source):
+
+    raw_df = clean_columns(raw_df)
+
+    print("=" * 80)
+    print("Rows received :", len(raw_df))
+    print("Columns :", len(raw_df.columns))
+    print(raw_df.columns.tolist())
+    print("=" * 80)
+
+    mapped_df = pd.DataFrame(index=raw_df.index)
+
+    for target_col, source_cols in mapping.items():
+
+        if target_col in [
+            "flag",
+            "created_at",
+            "updated_at"
+        ]:
+            continue
+
+        if target_col == "source_system":
+            mapped_df[target_col] = source
+            continue
+
+        value = None
+
+        for src in source_cols:
+
+            src = (
+                src.lower()
+                .strip()
+                .replace(" ", "_")
+                .replace("-", "_")
+                .replace("/", "_")
+                .replace("#", "")
+            )
+
+            if src in raw_df.columns:
+                value = raw_df[src]
+                break
+
+        if value is None:
+
+            value = pd.Series(
+                [None] * len(raw_df),
+                index=raw_df.index
+            )
+
+        mapped_df[target_col] = value
+
+    return mapped_df
+
+
+# =====================================================
+# PROCESS TRANSACTIONS
 # =====================================================
 
 def process_transactions(cams=None, kfin=None):
 
-    print("=" * 60)
-    print("PROCESS TRANSACTIONS")
-    print("=" * 60)
-
-    if cams is not None:
-        print("CAMS :", cams.shape)
-
-    if kfin is not None:
-        print("KFIN :", kfin.shape)
-
     dfs = []
 
-    # =====================================================
+    # =================================================
     # CAMS
-    # =====================================================
+    # =================================================
 
     if cams is not None and not cams.empty:
 
@@ -177,13 +293,14 @@ def process_transactions(cams=None, kfin=None):
         )
 
         cams_df = normalize(cams_df)
+        cams_df = clean_identifier_columns(cams_df)
         cams_df = format_dates(cams_df)
 
         dfs.append(cams_df)
 
-    # =====================================================
+    # =================================================
     # KFIN
-    # =====================================================
+    # =================================================
 
     if kfin is not None and not kfin.empty:
 
@@ -194,51 +311,61 @@ def process_transactions(cams=None, kfin=None):
         )
 
         kfin_df = normalize(kfin_df)
+        kfin_df = clean_identifier_columns(kfin_df)
         kfin_df = format_dates(kfin_df)
 
         dfs.append(kfin_df)
 
-    # =====================================================
+    # =================================================
     # NO FILE
-    # =====================================================
+    # =================================================
 
     if not dfs:
-        print("No Transaction file found.")
+
+        print("No Transaction files found.")
         return
 
-    # =====================================================
+    # =================================================
     # MERGE
-    # =====================================================
+    # =================================================
 
-    df = pd.concat(dfs, ignore_index=True)
+    df = pd.concat(
+        dfs,
+        ignore_index=True
+    )
 
-    # =====================================================
-    # AUDIT COLUMNS
-    # =====================================================
+    # =================================================
+    # TIMESTAMPS
+    # =================================================
 
     now = pd.Timestamp.now()
 
     df["created_at"] = now
     df["updated_at"] = now
 
-    # =====================================================
-    # LOAD EXISTING TABLE
-    # =====================================================
+    # =================================================
+    # READ EXISTING BRONZE TABLE
+    # =================================================
 
     try:
 
         existing = pd.read_sql(
-            "SELECT * FROM bronze.transaction_master",
+            """
+            SELECT *
+            FROM bronze.transaction_master
+            """,
             engine
         )
 
         existing = normalize(existing)
+        existing = clean_identifier_columns(existing)
+        existing = format_dates(existing)
 
     except Exception:
 
         existing = pd.DataFrame()
 
-    # =====================================================
+        # =====================================================
     # DUPLICATE FLAG
     # =====================================================
 
@@ -261,7 +388,6 @@ def process_transactions(cams=None, kfin=None):
             for c in df.columns
 
             if c in existing.columns
-
             and c not in ignore_cols
 
         ]
@@ -269,19 +395,38 @@ def process_transactions(cams=None, kfin=None):
         new_df = df[compare_cols].copy()
         old_df = existing[compare_cols].copy()
 
+        # =====================================================
+        # CLEAN IDENTIFIER COLUMNS
+        # =====================================================
+
+        new_df = clean_identifier_columns(new_df)
+        old_df = clean_identifier_columns(old_df)
+
+        # =====================================================
+        # NORMALIZE FOR COMPARISON
+        # =====================================================
+
         for col in compare_cols:
 
             if col in DATE_COLUMNS:
 
-                new_df[col] = pd.to_datetime(
-                    new_df[col],
-                    errors="coerce"
-                ).dt.strftime("%Y-%m-%d")
+                new_df[col] = (
+                    pd.to_datetime(
+                        new_df[col],
+                        errors="coerce"
+                    )
+                    .dt.strftime("%Y-%m-%d")
+                    .fillna("")
+                )
 
-                old_df[col] = pd.to_datetime(
-                    old_df[col],
-                    errors="coerce"
-                ).dt.strftime("%Y-%m-%d")
+                old_df[col] = (
+                    pd.to_datetime(
+                        old_df[col],
+                        errors="coerce"
+                    )
+                    .dt.strftime("%Y-%m-%d")
+                    .fillna("")
+                )
 
             else:
 
@@ -299,32 +444,36 @@ def process_transactions(cams=None, kfin=None):
                     .str.strip()
                 )
 
-        # ==========================================
-        # FAST HASH-BASED DUPLICATE CHECK
-        # ==========================================
+        # =====================================================
+        # COMPLETE ROW COMPARISON
+        # =====================================================
 
-        new_hash = pd.util.hash_pandas_object(
-            new_df,
-            index=False
+        new_keys = new_df.agg("|".join, axis=1)
+
+        old_keys = set(
+            old_df.agg("|".join, axis=1)
         )
 
-        old_hash = set(
-            pd.util.hash_pandas_object(
-                old_df,
-                index=False
-            )
+        df["flag"] = (
+            new_keys
+            .isin(old_keys)
+            .astype("int16")
         )
 
-        df["flag"] = new_hash.isin(old_hash).astype(int)
+        print("=" * 80)
+        print("Incoming Rows :", len(new_df))
+        print("Existing Rows :", len(old_df))
+        print("Duplicate Rows :", int(df["flag"].sum()))
+        print("=" * 80)
 
     # =====================================================
-    # NULL VALUES
+    # CLEAN IDENTIFIERS AGAIN
     # =====================================================
 
-    df = df.where(pd.notnull(df), None)
+    df = clean_identifier_columns(df)
 
     # =====================================================
-    # COLUMN ORDER
+    # GET DATABASE COLUMN ORDER
     # =====================================================
 
     db_columns = pd.read_sql(
@@ -338,6 +487,10 @@ def process_transactions(cams=None, kfin=None):
         engine
     )["column_name"].tolist()
 
+    # =====================================================
+    # ADD MISSING COLUMNS
+    # =====================================================
+
     for col in db_columns:
 
         if col not in df.columns:
@@ -345,15 +498,87 @@ def process_transactions(cams=None, kfin=None):
 
     df = df[db_columns]
 
+        # =====================================================
+    # FINAL DATE CLEANING
     # =====================================================
-    # INSERT
+
+    for col in DATE_COLUMNS:
+
+        if col in df.columns:
+
+            df[col] = (
+                pd.to_datetime(
+                    df[col],
+                    errors="coerce"
+                )
+                .dt.date
+            )
+
+            df[col] = df[col].where(
+                pd.notnull(df[col]),
+                None
+            )
+
     # =====================================================
-    print(df.head())
-    print(df.shape)
-    print(df.columns.tolist())
+    # CLEAN NON-DATE COLUMNS
+    # =====================================================
+
+    for col in df.columns:
+
+        if col not in DATE_COLUMNS:
+
+            df[col] = df[col].replace(
+                {
+                    "": None,
+                    "nan": None,
+                    "None": None,
+                    "<NA>": None,
+                    "NaT": None
+                }
+            )
+
+    # =====================================================
+    # FINAL IDENTIFIER CLEANING
+    # =====================================================
+
+    df = clean_identifier_columns(df)
+
+    # =====================================================
+    # REPLACE REMAINING NaN
+    # =====================================================
+
+    df = df.where(pd.notnull(df), None)
+
+    # =====================================================
+    # REMOVE EXACT DUPLICATES IN CURRENT FILE
+    # =====================================================
+
+    before = len(df)
+
+    df = (
+        df
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    print(f"Removed {before-len(df)} exact duplicate rows")
+
+    # =====================================================
+    # FINAL COLUMN ORDER
+    # =====================================================
+
+    df = df[db_columns]
+
+    # =====================================================
+    # INSERT INTO POSTGRES
+    # =====================================================
+
+    print("=" * 80)
+    print("Loading Transaction Master...")
+    print(f"Rows to insert : {len(df)}")
+    print("=" * 80)
 
     df.to_sql(
-
         "transaction_master",
         engine,
         schema="bronze",
@@ -361,17 +586,12 @@ def process_transactions(cams=None, kfin=None):
         index=False,
         method="multi",
         chunksize=5000
-
     )
-    print("Successfully inserted into bronze.transaction_master")
 
-    # =====================================================
-    # LOG
-    # =====================================================
+    print("=" * 80)
+    print("Transaction Master Loaded Successfully")
+    print(f"Inserted {len(df)} rows")
+    print(f"Duplicate Rows : {int(df['flag'].sum())}")
+    print("=" * 80)
 
-    print("=" * 60)
-    print("Transaction ETL Completed Successfully")
-    print("=" * 60)
-    print(f"Inserted Rows : {len(df)}")
-    print(f"Duplicate Rows : {df['flag'].sum()}")
-    print("=" * 60)  
+    return df

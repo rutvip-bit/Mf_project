@@ -206,9 +206,24 @@ def extract_and_push(uploaded_files):
 
                 sip_files.append(("UNKNOWN", df))
 
+    # =====================================================
     # Transactions
-    if transaction_files:
-        process_transactions(transaction_files)
+    # =====================================================
+
+    transaction_df = (
+        pd.concat(
+            transaction_files,
+            ignore_index=True
+        )
+        if transaction_files
+        else None
+    )
+
+    if transaction_df is not None:
+
+        process_transactions(
+            cams=transaction_df
+        )
 
     # Investors
     cams_df = (
